@@ -176,16 +176,30 @@ export class TrainingWorld {
   bindControls() {
     window.addEventListener("resize", () => this.resize());
 
+    const movementCodes = new Set([
+      "KeyW",
+      "KeyA",
+      "KeyS",
+      "KeyD",
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight"
+    ]);
+
     window.addEventListener("keydown", (event) => {
-      const key = event.key.toLowerCase();
-      if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+      if (movementCodes.has(event.code)) {
         event.preventDefault();
-        this.keys.add(key);
+        this.keys.add(event.code);
       }
     });
 
     window.addEventListener("keyup", (event) => {
-      this.keys.delete(event.key.toLowerCase());
+      this.keys.delete(event.code);
+    });
+
+    window.addEventListener("blur", () => {
+      this.keys.clear();
     });
 
     this.canvas.addEventListener("click", () => {
@@ -326,10 +340,10 @@ export class TrainingWorld {
     let forwardInput = 0;
     let rightInput = 0;
 
-    if (this.keys.has("w") || this.keys.has("arrowup")) forwardInput += 1;
-    if (this.keys.has("s") || this.keys.has("arrowdown")) forwardInput -= 1;
-    if (this.keys.has("d") || this.keys.has("arrowright")) rightInput += 1;
-    if (this.keys.has("a") || this.keys.has("arrowleft")) rightInput -= 1;
+    if (this.keys.has("KeyW") || this.keys.has("ArrowUp")) forwardInput += 1;
+    if (this.keys.has("KeyS") || this.keys.has("ArrowDown")) forwardInput -= 1;
+    if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) rightInput += 1;
+    if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) rightInput -= 1;
 
     forwardInput += -this.joystickVector.y;
     rightInput += this.joystickVector.x;
@@ -340,10 +354,11 @@ export class TrainingWorld {
       rightInput /= inputLength;
     }
 
-    const forwardX = Math.sin(this.yaw);
+    // Camera forward/right vectors for Three.js' -Z viewing direction.
+    const forwardX = -Math.sin(this.yaw);
     const forwardZ = -Math.cos(this.yaw);
     const rightX = Math.cos(this.yaw);
-    const rightZ = Math.sin(this.yaw);
+    const rightZ = -Math.sin(this.yaw);
     const speed = 4.4;
     const dx = (forwardX * forwardInput + rightX * rightInput) * speed * delta;
     const dz = (forwardZ * forwardInput + rightZ * rightInput) * speed * delta;
