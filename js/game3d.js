@@ -7,6 +7,7 @@ import { stage05 } from "./stages/stage05.js";
 import { stage06 } from "./stages/stage06.js";
 import { stage07 } from "./stages/stage07.js";
 import { stage08 } from "./stages/stage08.js";
+import { stage09 } from "./stages/stage09.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
@@ -16,7 +17,8 @@ const STAGES = new Map([
   [stage05.id, stage05],
   [stage06.id, stage06],
   [stage07.id, stage07],
-  [stage08.id, stage08]
+  [stage08.id, stage08],
+  [stage09.id, stage09]
 ]);
 
 export class TrainingWorld {
@@ -414,6 +416,39 @@ export class TrainingWorld {
     gain.connect(this.audioContext.destination);
     oscillator.start(startAt);
     oscillator.stop(startAt + 2);
+  }
+
+  playDroneBuzz(intensity = 0.08) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!this.audioContext) this.audioContext = new AudioContextClass();
+    if (this.audioContext.state === "suspended") this.audioContext.resume();
+
+    const oscillator = this.audioContext.createOscillator();
+    const modulation = this.audioContext.createOscillator();
+    const modulationGain = this.audioContext.createGain();
+    const gain = this.audioContext.createGain();
+    const startAt = this.audioContext.currentTime;
+
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(96, startAt);
+    modulation.type = "sine";
+    modulation.frequency.setValueAtTime(17, startAt);
+    modulationGain.gain.setValueAtTime(11, startAt);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.025, intensity), startAt + 0.08);
+    gain.gain.setValueAtTime(Math.max(0.025, intensity), startAt + 1.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.25);
+
+    modulation.connect(modulationGain);
+    modulationGain.connect(oscillator.frequency);
+    oscillator.connect(gain);
+    gain.connect(this.audioContext.destination);
+    oscillator.start(startAt);
+    modulation.start(startAt);
+    oscillator.stop(startAt + 1.3);
+    modulation.stop(startAt + 1.3);
   }
 
   add(object) {
@@ -1039,6 +1074,130 @@ export class TrainingWorld {
     group.add(light);
 
     group.position.set(x, 0, z);
+    return this.add(group);
+  }
+
+  addGlassBusStop(x, z, rotation = 0) {
+    const group = new THREE.Group();
+    const frame = new THREE.MeshStandardMaterial({ color: 0x39413f, roughness: 0.55, metalness: 0.35 });
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0xa9c7cb,
+      transparent: true,
+      opacity: 0.28,
+      roughness: 0.12,
+      metalness: 0.05,
+      side: THREE.DoubleSide
+    });
+    const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x505a57, roughness: 0.65 });
+
+    const backGlass = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 2.55), glass);
+    backGlass.position.set(0, 1.4, -0.72);
+    group.add(backGlass);
+
+    for (const side of [-1, 1]) {
+      const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.55), glass);
+      sideGlass.position.set(side * 2.38, 1.4, -0.02);
+      sideGlass.rotation.y = Math.PI / 2;
+      group.add(sideGlass);
+
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.8, 0.1), frame);
+      post.position.set(side * 2.4, 1.4, -0.72);
+      group.add(post);
+    }
+
+    const centerPost = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.8, 0.1), frame);
+    centerPost.position.set(0, 1.4, -0.72);
+    group.add(centerPost);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.1, 0.16, 1.65), roofMaterial);
+    roof.position.set(0, 2.78, -0.05);
+    group.add(roof);
+
+    const bench = new THREE.Mesh(
+      new THREE.BoxGeometry(3.2, 0.14, 0.55),
+      new THREE.MeshStandardMaterial({ color: 0x6f543b, roughness: 0.88 })
+    );
+    bench.position.set(0, 0.58, -0.38);
+    group.add(bench);
+
+    for (const legX of [-1.2, 1.2]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.58, 0.1), frame);
+      leg.position.set(legX, 0.29, -0.38);
+      group.add(leg);
+    }
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addMobileShelter(x, z, rotation = 0) {
+    const group = new THREE.Group();
+    const concrete = new THREE.MeshStandardMaterial({ color: 0x8a8c87, roughness: 0.98 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x111514 });
+    const white = new THREE.MeshStandardMaterial({ color: 0xf0eee7, roughness: 0.8 });
+    const red = new THREE.MeshStandardMaterial({ color: 0xc9232b, roughness: 0.65 });
+
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.16, 4.4), concrete);
+    floor.position.set(0, 0.05, 0);
+    group.add(floor);
+
+    for (const side of [-1, 1]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.32, 2.9, 4.4), concrete);
+      wall.position.set(side * 1.55, 1.5, 0);
+      group.add(wall);
+    }
+
+    const back = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.9, 0.32), concrete);
+    back.position.set(0, 1.5, -2.05);
+    group.add(back);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(3.7, 0.28, 4.65), concrete);
+    roof.position.set(0, 3.0, -0.02);
+    group.add(roof);
+
+    const interior = new THREE.Mesh(new THREE.PlaneGeometry(2.75, 2.7), dark);
+    interior.position.set(0, 1.43, 2.08);
+    group.add(interior);
+
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.92, 0.08), white);
+    sign.position.set(0, 2.28, 2.22);
+    group.add(sign);
+
+    const crossVertical = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.64, 0.09), red);
+    crossVertical.position.set(0, 2.28, 2.27);
+    const crossHorizontal = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.22, 0.09), red);
+    crossHorizontal.position.set(0, 2.28, 2.28);
+    group.add(crossVertical, crossHorizontal);
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addAttackDrone(x, y, z) {
+    const group = new THREE.Group();
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x343936, roughness: 0.7 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.2, 2.4, 10), bodyMaterial);
+    body.rotation.x = Math.PI / 2;
+    group.add(body);
+
+    const wingShape = new THREE.Shape();
+    wingShape.moveTo(0, -0.75);
+    wingShape.lineTo(2.15, 0.78);
+    wingShape.lineTo(0.28, 0.35);
+    wingShape.lineTo(-0.28, 0.35);
+    wingShape.lineTo(-2.15, 0.78);
+    wingShape.closePath();
+    const wing = new THREE.Mesh(
+      new THREE.ShapeGeometry(wingShape),
+      new THREE.MeshStandardMaterial({ color: 0x414743, side: THREE.DoubleSide, roughness: 0.76 })
+    );
+    wing.rotation.x = -Math.PI / 2;
+    wing.position.y = 0.05;
+    group.add(wing);
+
+    group.position.set(x, y, z);
     return this.add(group);
   }
 
