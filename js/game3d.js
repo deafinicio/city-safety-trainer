@@ -220,6 +220,7 @@ export class TrainingWorld {
 
     this.onDialogueChange?.({
       visible: true,
+      variant: dialogue.variant || "questions",
       title: dialogue.title,
       prompt: dialogue.prompt,
       options: dialogue.options
@@ -238,6 +239,7 @@ export class TrainingWorld {
     this.controlsLocked = false;
     this.onDialogueChange?.({
       visible: false,
+      variant: "questions",
       title: "",
       prompt: "",
       options: []
