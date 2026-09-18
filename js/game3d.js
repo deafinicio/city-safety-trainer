@@ -408,29 +408,46 @@ export class TrainingWorld {
     });
 
     for (const angle of [-0.62, 0.62]) {
-      const branch = new THREE.Mesh(
+      const warningBranch = new THREE.Mesh(
         new THREE.CylinderGeometry(0.055, 0.09, 2.8, 7),
         branchMaterial
       );
-      branch.rotation.z = Math.PI / 2;
-      branch.rotation.y = angle;
-      branch.position.y = 0.11;
-      group.add(branch);
+      warningBranch.rotation.z = Math.PI / 2;
+      warningBranch.rotation.y = angle;
+      warningBranch.position.y = 0.11;
+      group.add(warningBranch);
     }
 
-    const hangingBranch = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.045, 0.07, 2.1, 7),
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.13, 0.2, 3.4, 9),
       branchMaterial
     );
-    hangingBranch.rotation.z = Math.PI / 2;
-    hangingBranch.position.set(1.25, 1.85, 0);
-    group.add(hangingBranch);
+    trunk.position.set(2.15, 1.7, 0.35);
+    trunk.rotation.z = -0.04;
+    group.add(trunk);
+
+    const sideBranch = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.055, 0.1, 1.7, 8),
+      branchMaterial
+    );
+    sideBranch.rotation.z = Math.PI / 2;
+    sideBranch.rotation.y = -0.08;
+    sideBranch.position.set(1.36, 2.25, 0.35);
+    group.add(sideBranch);
+
+    const twig = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.025, 0.045, 0.72, 7),
+      branchMaterial
+    );
+    twig.position.set(0.58, 1.95, 0.35);
+    twig.rotation.z = 0.18;
+    group.add(twig);
 
     const cord = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.012, 0.012, 0.65, 6),
+      new THREE.CylinderGeometry(0.012, 0.012, 0.68, 6),
       new THREE.MeshBasicMaterial({ color: 0x29251f })
     );
-    cord.position.set(1.65, 1.48, 0);
+    cord.position.set(0.64, 1.62, 0.35);
     group.add(cord);
 
     const bottleMaterial = new THREE.MeshStandardMaterial({
@@ -439,23 +456,24 @@ export class TrainingWorld {
       opacity: 0.82,
       roughness: 0.35
     });
+
     const bottle = new THREE.Mesh(
       new THREE.CylinderGeometry(0.13, 0.16, 0.58, 12),
       bottleMaterial
     );
-    bottle.position.set(1.65, 1.03, 0);
+    bottle.position.set(0.64, 1.08, 0.35);
 
     const neck = new THREE.Mesh(
       new THREE.CylinderGeometry(0.055, 0.075, 0.22, 10),
       bottleMaterial
     );
-    neck.position.set(1.65, 1.43, 0);
+    neck.position.set(0.64, 1.48, 0.35);
 
     const cap = new THREE.Mesh(
       new THREE.CylinderGeometry(0.062, 0.062, 0.06, 10),
       new THREE.MeshStandardMaterial({ color: 0x2d4e43, roughness: 0.7 })
     );
-    cap.position.set(1.65, 1.57, 0);
+    cap.position.set(0.64, 1.62, 0.35);
 
     group.add(bottle, neck, cap);
     group.position.set(x, 0, z);
@@ -463,19 +481,40 @@ export class TrainingWorld {
   }
 
   addTireTracks(x, z, length) {
-    const material = new THREE.MeshStandardMaterial({
-      color: 0x30382e,
+    const soilMaterial = new THREE.MeshStandardMaterial({
+      color: 0x4a5145,
+      roughness: 1
+    });
+    const treadMaterial = new THREE.MeshStandardMaterial({
+      color: 0x30372e,
       roughness: 1
     });
 
-    for (const offset of [-0.72, 0.72]) {
-      const track = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.3, length),
-        material
+    for (const side of [-1, 1]) {
+      const trackX = x + side * 0.86;
+      const compressedSoil = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.78, length),
+        soilMaterial
       );
-      track.rotation.x = -Math.PI / 2;
-      track.position.set(x + offset, 0.006, z);
-      this.add(track);
+      compressedSoil.rotation.x = -Math.PI / 2;
+      compressedSoil.position.set(trackX, 0.006, z);
+      this.add(compressedSoil);
+
+      const treadSpacing = 0.46;
+      const treadCount = Math.floor(length / treadSpacing);
+      for (let index = 0; index <= treadCount; index += 1) {
+        const tread = new THREE.Mesh(
+          new THREE.BoxGeometry(0.7, 0.025, 0.25),
+          treadMaterial
+        );
+        tread.position.set(
+          trackX,
+          0.018,
+          z - length / 2 + index * treadSpacing
+        );
+        tread.rotation.y = side * (index % 2 === 0 ? 0.13 : -0.13);
+        this.add(tread);
+      }
     }
   }
 
