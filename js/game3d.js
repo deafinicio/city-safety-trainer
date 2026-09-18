@@ -3,12 +3,14 @@ import { stage01 } from "./stages/stage01.js";
 import { stage02 } from "./stages/stage02.js";
 import { stage03 } from "./stages/stage03.js";
 import { stage04 } from "./stages/stage04.js";
+import { stage05 } from "./stages/stage05.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
   [stage02.id, stage02],
   [stage03.id, stage03],
-  [stage04.id, stage04]
+  [stage04.id, stage04],
+  [stage05.id, stage05]
 ]);
 
 export class TrainingWorld {
@@ -536,6 +538,63 @@ export class TrainingWorld {
       casing.rotation.set(Math.PI / 2, index * 0.83, 0.15);
       this.add(casing);
     }
+  }
+
+  addMineSignBack(x, z, rotation = 0) {
+    const group = new THREE.Group();
+    const postMaterial = new THREE.MeshStandardMaterial({
+      color: 0x4b4034,
+      roughness: 1
+    });
+    const backMaterial = new THREE.MeshStandardMaterial({
+      color: 0x8b908d,
+      metalness: 0.2,
+      roughness: 0.76
+    });
+    const hardwareMaterial = new THREE.MeshStandardMaterial({
+      color: 0x515653,
+      metalness: 0.48,
+      roughness: 0.5
+    });
+
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.075, 0.09, 2.7, 10),
+      postMaterial
+    );
+    post.position.set(0, 1.35, -0.12);
+    group.add(post);
+
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(2.25, 1.55, 0.11),
+      backMaterial
+    );
+    board.position.set(0, 1.95, 0);
+    group.add(board);
+
+    for (const railY of [1.58, 2.32]) {
+      const mountingRail = new THREE.Mesh(
+        new THREE.BoxGeometry(1.82, 0.09, 0.075),
+        hardwareMaterial
+      );
+      mountingRail.position.set(0, railY, 0.095);
+      group.add(mountingRail);
+    }
+
+    for (const boltX of [-0.78, 0.78]) {
+      for (const boltY of [1.58, 2.32]) {
+        const bolt = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.045, 0.045, 0.035, 12),
+          hardwareMaterial
+        );
+        bolt.rotation.x = Math.PI / 2;
+        bolt.position.set(boltX, boltY, 0.145);
+        group.add(bolt);
+      }
+    }
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
   }
 
   addMineWarningSign(x, z, rotation = 0) {
