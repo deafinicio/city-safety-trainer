@@ -584,6 +584,45 @@ h2 {
   outline-offset: 2px;
 }
 
+.dialogue-panel--dialer {
+  width: min(390px, calc(100% - 32px));
+  text-align: center;
+}
+
+.dialogue-panel--dialer h2 {
+  min-height: 3.4em;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #08100c;
+  color: var(--text);
+  font-size: clamp(1.05rem, 3vw, 1.35rem);
+  line-height: 1.45;
+}
+
+.dialogue-options--dialer {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dialogue-options--dialer .dialogue-option {
+  min-height: 64px;
+  padding: 10px;
+  text-align: center;
+  font-size: 1.35rem;
+}
+
+.dialogue-options--dialer .dialogue-option--call {
+  border-color: rgba(107, 213, 132, 0.65);
+  background: #245b34;
+  color: #f2fff5;
+  font-size: 0.95rem;
+}
+
+.dialogue-options--dialer .dialogue-option--utility {
+  color: var(--accent);
+}
+
 @media (max-width: 640px) {
   .dialogue-panel {
     max-height: calc(100dvh - 30px);
