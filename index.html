@@ -18,14 +18,19 @@
         та обирайте безпечніший алгоритм дій.
       </p>
 
-      <div class="notice" role="note">
-        <strong>Етап 1 · Зруйнований сектор.</strong>
-        Ваше завдання — дістатися контрольної точки, не наражаючи себе на небезпеку.
-      </div>
+      <div class="stage-list" aria-label="Доступні навчальні етапи">
+        <button class="stage-card" id="stage-01-button" type="button">
+          <span>Етап 1</span>
+          <strong>Зруйнований сектор і завали</strong>
+          <small>Вибір безпечнішого маршруту</small>
+        </button>
 
-      <button class="button button--primary" id="start-button" type="button">
-        Почати етап
-      </button>
+        <button class="stage-card" id="stage-02-button" type="button">
+          <span>Етап 2</span>
+          <strong>Дистанційне мінування</strong>
+          <small>Виявлення міни, зупинка та повідомлення</small>
+        </button>
+      </div>
     </section>
 
     <section class="screen screen--game" id="scene-screen" aria-label="Тренувальна 3D-сцена">
@@ -33,14 +38,16 @@
 
       <div class="game-hud">
         <div class="mission">
-          <span class="mission__label">Етап 1 · Зруйнований сектор</span>
-          <strong>Огляньте місцевість і дістаньтеся жовтої контрольної точки</strong>
+          <span class="mission__label" id="mission-label"></span>
+          <strong id="mission-instruction"></strong>
         </div>
         <button class="hud-button" id="exit-button" type="button">Вийти</button>
       </div>
 
+      <button class="action-control" id="action-button" type="button" hidden></button>
+
       <div class="desktop-hint">
-        <strong>WASD</strong> — рух · <strong>миша</strong> — огляд · натисніть на сцену
+        <strong>WASD</strong> — рух · <strong>миша</strong> — огляд · <strong>E</strong> — дія
       </div>
 
       <div class="crosshair" aria-hidden="true"></div>
@@ -57,10 +64,7 @@
         <p class="eyebrow">Небезпека</p>
         <h2>Обрано небезпечний алгоритм дій</h2>
         <p id="failure-reason"></p>
-        <p class="feedback-guidance">
-          Не заходьте глибше в небезпечну зону, не наближайтеся до боєприпасу
-          та оберіть безпечніший маршрут.
-        </p>
+        <p class="feedback-guidance" id="failure-guidance"></p>
         <button class="button button--primary" id="retry-button" type="button">
           Повторити епізод
         </button>
@@ -68,28 +72,22 @@
     </section>
 
     <section class="screen" id="result-screen" aria-labelledby="result-title">
-      <p class="eyebrow">Етап 1 завершено</p>
-      <h2 id="result-title">Обрано безпечніший маршрут</h2>
+      <p class="eyebrow" id="result-label"></p>
+      <h2 id="result-title"></h2>
       <p class="lead" id="result-message"></p>
+      <dl class="result-metrics" id="result-metrics"></dl>
 
-      <dl class="result-metrics">
-        <div>
-          <dt>Час вибору маршруту</dt>
-          <dd id="metric-time">—</dd>
-        </div>
-        <div>
-          <dt>Мінімальна дистанція</dt>
-          <dd id="metric-distance">—</dd>
-        </div>
-        <div>
-          <dt>Коригування рішення</dt>
-          <dd id="metric-correction">—</dd>
-        </div>
-      </dl>
-
-      <button class="button button--primary" id="restart-button" type="button">
-        Пройти етап ще раз
-      </button>
+      <div class="result-actions">
+        <button class="button button--primary" id="next-button" type="button">
+          Наступний етап
+        </button>
+        <button class="button button--secondary" id="restart-button" type="button">
+          Пройти ще раз
+        </button>
+        <button class="button button--ghost" id="menu-button" type="button">
+          До списку етапів
+        </button>
+      </div>
     </section>
   </main>
 
