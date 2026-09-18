@@ -38,6 +38,11 @@ button {
   font: inherit;
 }
 
+input,
+select {
+  font: inherit;
+}
+
 .app {
   width: min(1100px, 100%);
   min-height: 640px;
@@ -130,6 +135,175 @@ h2 {
   align-self: flex-start;
   background: var(--accent);
   color: var(--accent-dark);
+}
+
+.registration-screen {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(80, 141, 94, 0.18), transparent 36%),
+    linear-gradient(135deg, rgba(13, 23, 17, 0.98), rgba(20, 32, 24, 0.98));
+}
+
+.registration-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  align-items: center;
+  gap: clamp(36px, 7vw, 88px);
+}
+
+.registration-intro h1 {
+  font-size: clamp(2.8rem, 7vw, 5.6rem);
+}
+
+.registration-note {
+  display: grid;
+  gap: 5px;
+  max-width: 520px;
+  margin-top: 28px;
+  padding: 16px 18px;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 12px 12px 0;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.registration-note strong {
+  color: var(--text);
+}
+
+.registration-form {
+  display: grid;
+  gap: 18px;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: rgba(9, 15, 11, 0.72);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(190px, 1.3fr);
+  gap: 14px;
+}
+
+.form-field {
+  display: grid;
+  gap: 7px;
+}
+
+.form-field label {
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  padding: 11px 13px;
+  background: #101a14;
+  color: var(--text);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.form-field input::placeholder {
+  color: #839087;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(239, 200, 74, 0.14);
+}
+
+.form-field input[aria-invalid="true"],
+.form-field select[aria-invalid="true"] {
+  border-color: #ff8b7b;
+}
+
+.field-error {
+  min-height: 1.15em;
+  color: #ffaaa0;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.field-error--consent {
+  margin-top: -14px;
+}
+
+.consent-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.consent-field input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.form-status {
+  min-height: 1.25em;
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.form-status--error {
+  color: #ffaaa0;
+}
+
+.registration-submit {
+  width: 100%;
+}
+
+.registration-submit:disabled {
+  cursor: wait;
+  filter: saturate(0.5);
+  opacity: 0.72;
+}
+
+.participant-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(780px, 100%);
+  margin-bottom: 24px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.participant-change {
+  border: 0;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.participant-change:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
 }
 
 .screen--game {
@@ -315,6 +489,28 @@ h2 {
   .mission {
     max-width: calc(100vw - 102px);
     font-size: 0.86rem;
+  }
+}
+
+@media (max-width: 860px) {
+  .registration-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .registration-intro .lead,
+  .registration-note {
+    max-width: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .participant-bar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

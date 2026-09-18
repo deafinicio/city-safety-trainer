@@ -1,12 +1,24 @@
 import { TrainingWorld } from "./game3d.js";
+import {
+  clearStoredRegistration,
+  hasStoredRegistration,
+  submitRegistration,
+  validateRegistration
+} from "./registration.js";
 
 const screens = {
+  registration: document.querySelector("#registration-screen"),
   start: document.querySelector("#start-screen"),
   scene: document.querySelector("#scene-screen"),
   result: document.querySelector("#result-screen")
 };
 
 const elements = {
+  registrationForm: document.querySelector("#registration-form"),
+  registrationAge: document.querySelector("#registration-age"),
+  registrationStatus: document.querySelector("#registration-status"),
+  registrationSubmit: document.querySelector("#registration-submit"),
+  changeParticipantButton: document.querySelector("#change-participant-button"),
   stage01Button: document.querySelector("#stage-01-button"),
   stage02Button: document.querySelector("#stage-02-button"),
   stage03Button: document.querySelector("#stage-03-button"),
@@ -245,6 +257,67 @@ function showScreen(name) {
   screens[name].classList.add("screen--active");
 }
 
+function clearRegistrationErrors() {
+  elements.registrationForm.querySelectorAll("[aria-invalid='true']").forEach((field) => {
+    field.removeAttribute("aria-invalid");
+  });
+  elements.registrationForm.querySelectorAll("[data-error-for]").forEach((error) => {
+    error.textContent = "";
+  });
+  elements.registrationStatus.textContent = "";
+  elements.registrationStatus.classList.remove("form-status--error");
+}
+
+function showRegistrationErrors(errors) {
+  for (const [name, message] of Object.entries(errors)) {
+    const field = elements.registrationForm.elements.namedItem(name);
+    const error = elements.registrationForm.querySelector(`[data-error-for="${name}"]`);
+    field?.setAttribute("aria-invalid", "true");
+    if (error) error.textContent = message;
+  }
+
+  const firstInvalid = elements.registrationForm.querySelector("[aria-invalid='true']");
+  firstInvalid?.focus();
+}
+
+async function handleRegistration(event) {
+  event.preventDefault();
+  clearRegistrationErrors();
+
+  const formData = new FormData(elements.registrationForm);
+  const validation = validateRegistration({
+    surname: formData.get("surname"),
+    firstName: formData.get("firstName"),
+    age: formData.get("age"),
+    gender: formData.get("gender"),
+    consent: formData.get("consent") === "on"
+  });
+
+  if (!validation.valid) {
+    showRegistrationErrors(validation.errors);
+    return;
+  }
+
+  elements.registrationSubmit.disabled = true;
+  elements.registrationSubmit.textContent = "Зберігаємо…";
+  elements.registrationStatus.textContent = "Створюємо реєстрацію учасника.";
+
+  try {
+    await submitRegistration(validation.data);
+    elements.registrationForm.reset();
+    showScreen("start");
+  } catch (error) {
+    const isTimeout = error?.name === "AbortError";
+    elements.registrationStatus.textContent = isTimeout
+      ? "Сервер не відповів вчасно. Перевірте інтернет і спробуйте ще раз."
+      : "Не вдалося зберегти реєстрацію. Перевірте інтернет і спробуйте ще раз.";
+    elements.registrationStatus.classList.add("form-status--error");
+  } finally {
+    elements.registrationSubmit.disabled = false;
+    elements.registrationSubmit.textContent = "Зареєструватися і почати";
+  }
+}
+
 function renderMetrics(items) {
   elements.resultMetrics.replaceChildren();
 
@@ -390,3 +463,24 @@ elements.nextButton.addEventListener("click", () => {
 elements.menuButton.addEventListener("click", returnToMenu);
 elements.exitButton.addEventListener("click", returnToMenu);
 elements.actionButton.addEventListener("click", () => world?.performAction());
+elements.registrationForm.addEventListener("submit", handleRegistration);
+elements.registrationForm.addEventListener("input", (event) => {
+  const field = event.target;
+  if (!field.name) return;
+  field.removeAttribute("aria-invalid");
+  const error = elements.registrationForm.querySelector(`[data-error-for="${field.name}"]`);
+  if (error) error.textContent = "";
+});
+elements.registrationAge.addEventListener("input", () => {
+  elements.registrationAge.value = elements.registrationAge.value.replace(/\D/g, "").slice(0, 3);
+});
+elements.changeParticipantButton.addEventListener("click", () => {
+  clearStoredRegistration();
+  clearRegistrationErrors();
+  showScreen("registration");
+  document.querySelector("#registration-surname").focus();
+});
+
+if (hasStoredRegistration()) {
+  showScreen("start");
+}
