@@ -5,6 +5,7 @@ import { stage03 } from "./stages/stage03.js";
 import { stage04 } from "./stages/stage04.js";
 import { stage05 } from "./stages/stage05.js";
 import { stage06 } from "./stages/stage06.js";
+import { stage07 } from "./stages/stage07.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
@@ -12,7 +13,8 @@ const STAGES = new Map([
   [stage03.id, stage03],
   [stage04.id, stage04],
   [stage05.id, stage05],
-  [stage06.id, stage06]
+  [stage06.id, stage06],
+  [stage07.id, stage07]
 ]);
 
 export class TrainingWorld {
@@ -76,6 +78,7 @@ export class TrainingWorld {
     this.activeDialogue = null;
     this.dialogueHandler = null;
     this.controlsLocked = false;
+    this.movementLocked = false;
     this.audioContext = null;
     this.elapsedMs = 0;
     this.startTime = 0;
@@ -141,6 +144,7 @@ export class TrainingWorld {
     this.completed = false;
     this.clearAction();
     this.clearDialogue();
+    this.movementLocked = false;
     this.yaw = 0;
     this.pitch = 0;
     this.keys.clear();
@@ -246,6 +250,67 @@ export class TrainingWorld {
     });
   }
 
+  openEmergencyDialer({ acceptedNumbers, onComplete, title = "Телефон екстреного виклику" }) {
+    const allowedNumbers = new Set(acceptedNumbers);
+    let dialedNumber = "";
+    let errorText = "";
+
+    const renderDialer = () => {
+      const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+      const options = digits.map((digit) => ({
+        label: digit,
+        value: `digit:${digit}`,
+        kind: "digit"
+      }));
+
+      options.push(
+        { label: "⌫", value: "backspace", kind: "utility", ariaLabel: "Видалити останню цифру" },
+        { label: "0", value: "digit:0", kind: "digit" },
+        { label: "Виклик", value: "call", kind: "call" }
+      );
+
+      const numberDisplay = dialedNumber || "—";
+      const error = errorText ? ` ${errorText}` : "";
+
+      this.setDialogue(
+        {
+          variant: "dialer",
+          title,
+          prompt: `Наберіть номер служби: ${numberDisplay}.${error}`,
+          options
+        },
+        (value) => {
+          if (value.startsWith("digit:")) {
+            if (dialedNumber.length < 3) dialedNumber += value.slice(-1);
+            errorText = "";
+            renderDialer();
+            return;
+          }
+
+          if (value === "backspace") {
+            dialedNumber = dialedNumber.slice(0, -1);
+            errorText = "";
+            renderDialer();
+            return;
+          }
+
+          if (value === "call" && allowedNumbers.has(dialedNumber)) {
+            onComplete(dialedNumber);
+            return;
+          }
+
+          if (value === "call") {
+            dialedNumber = "";
+            errorText = `Правильний номер: ${acceptedNumbers.join(", ")}.`;
+            renderDialer();
+          }
+        }
+      );
+    };
+
+    renderDialer();
+  }
+
   playAlertTone() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
@@ -273,6 +338,30 @@ export class TrainingWorld {
     gain.connect(this.audioContext.destination);
     oscillator.start(startAt);
     oscillator.stop(startAt + 0.34);
+  }
+
+  playVehicleStopSound() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!this.audioContext) this.audioContext = new AudioContextClass();
+    if (this.audioContext.state === "suspended") this.audioContext.resume();
+
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    const startAt = this.audioContext.currentTime;
+
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(105, startAt);
+    oscillator.frequency.exponentialRampToValueAtTime(38, startAt + 0.75);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.16, startAt + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.82);
+
+    oscillator.connect(gain);
+    gain.connect(this.audioContext.destination);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + 0.85);
   }
 
   add(object) {
@@ -680,6 +769,113 @@ export class TrainingWorld {
     phone.position.set(0.52, 0.04, 0.08);
     phone.rotation.y = -0.35;
     group.add(phone);
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addAntiVehicleMine(x, z, rotation = 0) {
+    const group = new THREE.Group();
+    const casingMaterial = new THREE.MeshStandardMaterial({
+      color: 0x4b543d,
+      roughness: 0.84,
+      metalness: 0.18
+    });
+    const detailMaterial = new THREE.MeshStandardMaterial({
+      color: 0x30372d,
+      roughness: 0.72,
+      metalness: 0.28
+    });
+
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.62, 0.68, 0.24, 20),
+      casingMaterial
+    );
+    body.position.y = 0.13;
+    group.add(body);
+
+    const pressurePlate = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.4, 0.43, 0.1, 18),
+      detailMaterial
+    );
+    pressurePlate.position.y = 0.3;
+    group.add(pressurePlate);
+
+    for (let index = 0; index < 8; index += 1) {
+      const rib = new THREE.Mesh(
+        new THREE.BoxGeometry(0.13, 0.06, 0.52),
+        casingMaterial
+      );
+      rib.position.y = 0.34;
+      rib.rotation.y = (Math.PI * index) / 4;
+      group.add(rib);
+    }
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addCarInterior(x, z, rotation = 0) {
+    const group = new THREE.Group();
+    const interior = new THREE.MeshStandardMaterial({ color: 0x232826, roughness: 0.86 });
+    const trim = new THREE.MeshStandardMaterial({ color: 0x111514, roughness: 0.72 });
+    const body = new THREE.MeshStandardMaterial({ color: 0x344c58, roughness: 0.62, metalness: 0.2 });
+    const glass = new THREE.MeshStandardMaterial({
+      color: 0x8ca5aa,
+      transparent: true,
+      opacity: 0.16,
+      roughness: 0.12
+    });
+
+    const dashboard = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.34, 0.72), interior);
+    dashboard.position.set(0, 1.12, -1.02);
+    dashboard.rotation.x = -0.12;
+    group.add(dashboard);
+
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.18, 1.75), body);
+    hood.position.set(0, 0.9, -2.08);
+    hood.rotation.x = -0.04;
+    group.add(hood);
+
+    const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.0), glass);
+    windshield.position.set(0, 1.76, -1.25);
+    windshield.rotation.x = -0.16;
+    group.add(windshield);
+
+    const topFrame = new THREE.Mesh(new THREE.BoxGeometry(2.18, 0.13, 0.15), trim);
+    topFrame.position.set(0, 2.28, -1.12);
+    group.add(topFrame);
+
+    for (const side of [-1, 1]) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.3, 0.16), trim);
+      pillar.position.set(side * 1.03, 1.69, -1.02);
+      pillar.rotation.z = side * -0.14;
+      group.add(pillar);
+
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.95, 2.2), interior);
+      door.position.set(side * 1.08, 1.08, 0.05);
+      group.add(door);
+
+      const sideWindow = new THREE.Mesh(new THREE.PlaneGeometry(1.45, 0.72), glass);
+      sideWindow.position.set(side * 1.075, 1.78, 0.0);
+      sideWindow.rotation.y = side * Math.PI / 2;
+      group.add(sideWindow);
+    }
+
+    const steeringWheel = new THREE.Mesh(
+      new THREE.TorusGeometry(0.3, 0.045, 10, 24),
+      trim
+    );
+    steeringWheel.position.set(-0.38, 1.43, -0.74);
+    steeringWheel.rotation.x = -0.18;
+    group.add(steeringWheel);
+
+    const steeringHub = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.12, 12), trim);
+    steeringHub.position.set(-0.38, 1.43, -0.75);
+    steeringHub.rotation.x = Math.PI / 2;
+    group.add(steeringHub);
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
@@ -1140,6 +1336,12 @@ export class TrainingWorld {
     }
 
     this.lastInputMagnitude = Math.hypot(forwardInput, rightInput);
+
+    if (this.movementLocked) {
+      this.camera.rotation.y = this.yaw;
+      this.camera.rotation.x = this.pitch;
+      return;
+    }
 
     const forwardX = -Math.sin(this.yaw);
     const forwardZ = -Math.cos(this.yaw);
