@@ -1,5 +1,3 @@
-const EMERGENCY_NUMBERS = new Set(["101", "102", "112"]);
-
 function shuffleOptions(options) {
   const shuffled = [...options];
 
@@ -61,8 +59,6 @@ export const stage06 = {
       callCompletedAtMs: null,
       callStep: 0,
       callSequenceCorrect: false,
-      dialedNumber: "",
-      dialError: "",
       calledNumber: null,
       lastRingAtMs: -2000,
       trajectory: [],
@@ -90,64 +86,6 @@ export const stage06 = {
       calledNumber: state.calledNumber,
       trajectoryPoints: state.trajectory.length
     };
-  },
-
-  showDialer(world) {
-    const state = world.stageState;
-    const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-    const options = digits.map((digit) => ({
-      label: digit,
-      value: `digit:${digit}`,
-      kind: "digit"
-    }));
-
-    options.push(
-      { label: "⌫", value: "backspace", kind: "utility", ariaLabel: "Видалити останню цифру" },
-      { label: "0", value: "digit:0", kind: "digit" },
-      { label: "Виклик", value: "call", kind: "call" }
-    );
-
-    const numberDisplay = state.dialedNumber || "—";
-    const errorText = state.dialError ? ` ${state.dialError}` : "";
-
-    world.setDialogue(
-      {
-        variant: "dialer",
-        title: "Телефон екстреного виклику",
-        prompt: `Наберіть номер служби: ${numberDisplay}.${errorText}`,
-        options
-      },
-      (value) => {
-        if (value.startsWith("digit:")) {
-          if (state.dialedNumber.length < 3) {
-            state.dialedNumber += value.slice(-1);
-          }
-          state.dialError = "";
-          this.showDialer(world);
-          return;
-        }
-
-        if (value === "backspace") {
-          state.dialedNumber = state.dialedNumber.slice(0, -1);
-          state.dialError = "";
-          this.showDialer(world);
-          return;
-        }
-
-        if (value === "call" && EMERGENCY_NUMBERS.has(state.dialedNumber)) {
-          state.calledNumber = state.dialedNumber;
-          state.dialError = "";
-          this.startCallSequence(world, 0);
-          return;
-        }
-
-        if (value === "call") {
-          state.dialedNumber = "";
-          state.dialError = "Оберіть правильний номер: 101, 102 або 112.";
-          this.showDialer(world);
-        }
-      }
-    );
   },
 
   startCallSequence(world, stepIndex = 0) {
@@ -339,7 +277,13 @@ export const stage06 = {
       world.setAction("Зателефонувати до екстреної служби", () => {
         state.callStartedAtMs = world.elapsedMs;
         world.clearAction();
-        this.showDialer(world);
+        world.openEmergencyDialer({
+          acceptedNumbers: ["101", "102", "112"],
+          onComplete: (number) => {
+            state.calledNumber = number;
+            this.startCallSequence(world, 0);
+          }
+        });
       });
     }
   }
