@@ -318,6 +318,10 @@ function updateStageHeader(stage) {
   elements.joystick.hidden = isVehicleStage;
 }
 
+function updateMissionInstruction(text) {
+  elements.missionInstruction.textContent = text;
+}
+
 function ensureWorld() {
   if (world) return;
 
@@ -330,6 +334,7 @@ function ensureWorld() {
     onFailure: showFailure,
     onActionChange: updateAction,
     onDialogueChange: updateDialogue,
+    onInstructionChange: updateMissionInstruction,
     onStageChange: updateStageHeader
   });
 }
