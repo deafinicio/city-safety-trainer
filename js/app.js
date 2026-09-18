@@ -13,6 +13,7 @@ const elements = {
   stage04Button: document.querySelector("#stage-04-button"),
   stage05Button: document.querySelector("#stage-05-button"),
   stage06Button: document.querySelector("#stage-06-button"),
+  stage07Button: document.querySelector("#stage-07-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
@@ -23,6 +24,8 @@ const elements = {
   dialogueTitle: document.querySelector("#dialogue-title"),
   dialoguePrompt: document.querySelector("#dialogue-prompt"),
   dialogueOptions: document.querySelector("#dialogue-options"),
+  desktopHint: document.querySelector("#desktop-hint"),
+  mobileHint: document.querySelector("#mobile-hint"),
   canvas: document.querySelector("#game-canvas"),
   joystick: document.querySelector("#joystick"),
   joystickKnob: document.querySelector("#joystick-knob"),
@@ -134,6 +137,23 @@ const resultContent = {
         ["Тривалість повідомлення", formatSeconds(metrics.callSeconds)]
       ];
     }
+  },
+  "stage-07": {
+    title: "Безпечний алгоритм у автомобілі обрано",
+    message:
+      "Ви залишилися в автомобілі, не намагалися самостійно виїхати з поля та правильно повідомили 101.",
+    guidance:
+      "Якщо автомобіль опинився на потенційно замінованій території, залишайтеся всередині, не відкривайте двері, не виходьте та не намагайтеся самостійно продовжити рух. Повідомте 101 і виконуйте отримані вказівки.",
+    metrics(metrics) {
+      return [
+        ["Час розпізнавання", formatSeconds(metrics.recognitionSeconds)],
+        ["Час вибору дії", formatSeconds(metrics.decisionSeconds)],
+        ["Залишився в автомобілі", metrics.stayedInVehicle ? "так" : "ні"],
+        ["Спроба продовжити рух", metrics.attemptedDrive ? "так" : "ні"],
+        ["Набраний номер", metrics.calledNumber || "не набрано"],
+        ["Тривалість повідомлення", formatSeconds(metrics.callSeconds)]
+      ];
+    }
   }
 };
 
@@ -175,7 +195,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-06";
+  elements.nextButton.hidden = stage.id === "stage-07";
   showScreen("result");
 }
 
@@ -216,6 +236,14 @@ function updateDialogue({ visible, variant = "questions", title, prompt, options
 function updateStageHeader(stage) {
   elements.missionLabel.textContent = "Етап " + stage.number + " · " + stage.shortTitle;
   elements.missionInstruction.textContent = stage.instruction;
+  const isVehicleStage = stage.id === "stage-07";
+  elements.desktopHint.innerHTML = isVehicleStage
+    ? "<strong>миша</strong> — огляд із салону · <strong>E</strong> — дія"
+    : "<strong>WASD</strong> — рух · <strong>миша</strong> — огляд · <strong>E</strong> — дія";
+  elements.mobileHint.textContent = isVehicleStage
+    ? "Праворуч — огляд · кнопка — дія"
+    : "Ліворуч — рух · праворуч — огляд";
+  elements.joystick.hidden = isVehicleStage;
 }
 
 function ensureWorld() {
@@ -258,6 +286,7 @@ elements.stage03Button.addEventListener("click", () => startTraining("stage-03")
 elements.stage04Button.addEventListener("click", () => startTraining("stage-04"));
 elements.stage05Button.addEventListener("click", () => startTraining("stage-05"));
 elements.stage06Button.addEventListener("click", () => startTraining("stage-06"));
+elements.stage07Button.addEventListener("click", () => startTraining("stage-07"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
 elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
 elements.nextButton.addEventListener("click", () => {
@@ -266,7 +295,8 @@ elements.nextButton.addEventListener("click", () => {
     "stage-02": "stage-03",
     "stage-03": "stage-04",
     "stage-04": "stage-05",
-    "stage-05": "stage-06"
+    "stage-05": "stage-06",
+    "stage-06": "stage-07"
   }[currentStageId];
 
   if (nextStage) startTraining(nextStage);
