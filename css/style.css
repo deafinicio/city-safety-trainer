@@ -528,3 +528,65 @@ h2 {
     width: 100%;
   }
 }
+
+
+.dialogue-panel {
+  position: absolute;
+  z-index: 32;
+  inset: 50% auto auto 50%;
+  width: min(620px, calc(100% - 32px));
+  translate: -50% -50%;
+  padding: clamp(24px, 5vw, 40px);
+  border: 1px solid rgba(239, 200, 74, 0.45);
+  border-radius: 22px;
+  background: rgba(14, 19, 15, 0.96);
+  box-shadow: 0 28px 100px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(18px);
+}
+
+.dialogue-panel[hidden] {
+  display: none;
+}
+
+.dialogue-panel h2 {
+  margin-bottom: 24px;
+  font-size: clamp(1.55rem, 4vw, 2.5rem);
+  line-height: 1.18;
+}
+
+.dialogue-options {
+  display: grid;
+  gap: 10px;
+}
+
+.dialogue-option {
+  min-height: 58px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 14px 17px;
+  background: var(--surface-soft);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-weight: 730;
+  line-height: 1.4;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.dialogue-option:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+  background: #233328;
+}
+
+.dialogue-option:focus-visible {
+  outline: 3px solid white;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .dialogue-panel {
+    max-height: calc(100dvh - 30px);
+    overflow-y: auto;
+  }
+}
