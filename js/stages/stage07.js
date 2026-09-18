@@ -111,11 +111,11 @@ export const stage07 = {
 
         state.stayedInVehicle = true;
         world.clearDialogue();
-        world.setAction("Зателефонувати 101", () => {
+        world.setAction("Зателефонувати до екстреної служби", () => {
           state.callStartedAtMs = world.elapsedMs;
           world.clearAction();
           world.openEmergencyDialer({
-            acceptedNumbers: ["101"],
+            acceptedNumbers: ["101", "102", "112"],
             onComplete: (number) => {
               state.calledNumber = number;
               this.startReportSequence(world, 0);
@@ -153,7 +153,7 @@ export const stage07 = {
 
     world.setDialogue(
       {
-        title: "Умовний виклик 101",
+        title: `Умовний виклик ${state.calledNumber}`,
         prompt: step.prompt,
         options: shuffleOptions(step.options).map(([label, value]) => ({ label, value }))
       },

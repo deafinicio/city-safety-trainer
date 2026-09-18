@@ -552,7 +552,26 @@ export class TrainingWorld {
     return this.add(road);
   }
 
-  addBuilding(x, y, z, width, height, depth, color) {
+  addCollisionBox(x, z, width, depth, rotation = 0, padding = 0) {
+    const cos = Math.abs(Math.cos(rotation));
+    const sin = Math.abs(Math.sin(rotation));
+    const halfX = (width * cos + depth * sin) / 2 + padding;
+    const halfZ = (width * sin + depth * cos) / 2 + padding;
+    const collider = {
+      minX: x - halfX,
+      maxX: x + halfX,
+      minZ: z - halfZ,
+      maxZ: z + halfZ
+    };
+    this.colliders.push(collider);
+    return collider;
+  }
+
+  addCollisionCircle(x, z, radius) {
+    return this.addCollisionBox(x, z, radius * 2, radius * 2);
+  }
+
+  addBuilding(x, y, z, width, height, depth, color, { collidable = true } = {}) {
     const building = new THREE.Mesh(
       new THREE.BoxGeometry(width, height, depth),
       new THREE.MeshStandardMaterial({ color, roughness: 0.95 })
@@ -575,6 +594,7 @@ export class TrainingWorld {
       }
     }
 
+    if (collidable) this.addCollisionBox(x, z, width, depth);
     return building;
   }
 
@@ -587,12 +607,7 @@ export class TrainingWorld {
     wall.rotation.y = rotation;
     this.add(wall);
 
-    this.colliders.push({
-      minX: x - width / 2,
-      maxX: x + width / 2,
-      minZ: z - depth,
-      maxZ: z + depth
-    });
+    this.addCollisionBox(x, z, width, depth, rotation);
 
     return wall;
   }
@@ -620,12 +635,7 @@ export class TrainingWorld {
       this.add(chunk);
     }
 
-    this.colliders.push({
-      minX: x - width / 2,
-      maxX: x + width / 2,
-      minZ: z - depth / 2,
-      maxZ: z + depth / 2
-    });
+    this.addCollisionBox(x, z, width, depth, base.rotation.y);
 
     return base;
   }
@@ -644,6 +654,7 @@ export class TrainingWorld {
     crown.position.set(x, 3.25, z);
     this.add(trunk);
     this.add(crown);
+    this.addCollisionCircle(x, z, 0.34);
   }
 
   addBench(x, z, rotation = 0) {
@@ -665,6 +676,7 @@ export class TrainingWorld {
     group.add(seat, back);
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z, 1.9, 0.62, rotation);
     return this.add(group);
   }
 
@@ -699,6 +711,7 @@ export class TrainingWorld {
     group.add(body, nose);
     group.position.set(x, 0.42, z);
     group.rotation.z = 0.12;
+    this.addCollisionBox(x, z, 1.1, 3.5);
     return this.add(group);
   }
 
@@ -722,6 +735,7 @@ export class TrainingWorld {
     group.add(leftLobe, rightLobe, center);
     group.position.set(x, partiallyHidden ? -0.035 : 0.055, z);
     group.rotation.y = rotation;
+    this.addCollisionCircle(x, z, 0.58);
     return this.add(group);
   }
 
@@ -802,6 +816,7 @@ export class TrainingWorld {
 
     group.add(bottle, neck, cap);
     group.position.set(x, 0, z);
+    this.addCollisionBox(x + 0.45, z, 3.8, 0.75);
     return this.add(group);
   }
 
@@ -927,6 +942,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z, 0.95, 0.68, rotation);
     return this.add(group);
   }
 
@@ -969,6 +985,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionCircle(x, z, 0.7);
     return this.add(group);
   }
 
@@ -1034,6 +1051,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z, 2.15, 3.6, rotation);
     return this.add(group);
   }
 
@@ -1062,6 +1080,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z, 2.15, 3.65, rotation);
     return this.add(group);
   }
 
@@ -1105,6 +1124,8 @@ export class TrainingWorld {
     group.add(slide);
 
     group.position.set(x, 0, z);
+    this.addCollisionBox(x, z + 0.35, 2.8, 0.5);
+    this.addCollisionBox(x + 1.45, z - 0.75, 1.1, 2.8);
     return this.add(group);
   }
 
@@ -1142,6 +1163,8 @@ export class TrainingWorld {
     group.add(light);
 
     group.position.set(x, 0, z);
+    this.addCollisionBox(x - 1.18, z, 0.24, 0.55);
+    this.addCollisionBox(x + 1.18, z, 0.24, 0.55);
     return this.add(group);
   }
 
@@ -1196,6 +1219,10 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z - 0.72, 4.8, 0.18, rotation);
+    this.addCollisionBox(x - 2.38, z - 0.02, 0.18, 1.4, rotation);
+    this.addCollisionBox(x + 2.38, z - 0.02, 0.18, 1.4, rotation);
+    this.addCollisionBox(x, z - 0.38, 3.2, 0.58, rotation);
     return this.add(group);
   }
 
@@ -1240,6 +1267,9 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x - 1.55, z, 0.32, 4.4, rotation);
+    this.addCollisionBox(x + 1.55, z, 0.32, 4.4, rotation);
+    this.addCollisionBox(x, z - 2.05, 3.4, 0.32, rotation);
     return this.add(group);
   }
 
@@ -1280,7 +1310,7 @@ export class TrainingWorld {
 
     const depression = new THREE.Mesh(new THREE.PlaneGeometry(2.3, length), lowGround);
     depression.rotation.x = -Math.PI / 2;
-    depression.position.set(-1.32, -0.012, 0);
+    depression.position.set(1.32, -0.012, 0);
     group.add(depression);
 
     for (let offset = -length / 2 + 0.6; offset < length / 2; offset += 1.2) {
@@ -1291,6 +1321,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z, 0.42, length, rotation);
     return this.add(group);
   }
 
@@ -1482,6 +1513,7 @@ export class TrainingWorld {
     group.add(landing);
 
     group.position.set(x, 0, z);
+    this.addCollisionBox(x, z - 2.15, 5.5, 0.28);
     return this.add(group);
   }
 
@@ -1539,6 +1571,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z, 2.3, 0.34, rotation);
     return this.add(group);
   }
 
@@ -1662,6 +1695,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z, 2.3, 0.34, rotation);
     return this.add(group);
   }
 
@@ -1709,6 +1743,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    this.addCollisionBox(x, z, length, 0.18, rotation);
     return this.add(group);
   }
 
@@ -1741,6 +1776,8 @@ export class TrainingWorld {
     this.add(leftPost);
     this.add(rightPost);
     this.add(top);
+    this.addCollisionBox(x - width / 2, z, 0.18, 0.18);
+    this.addCollisionBox(x + width / 2, z, 0.18, 0.18);
     return this.add(marker);
   }
 

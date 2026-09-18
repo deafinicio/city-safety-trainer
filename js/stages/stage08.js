@@ -21,7 +21,9 @@ export const stage08 = {
     world.addGround(0x596750);
     world.addRoad(0, 0, 9.5, 38, 0x73756f);
 
-    world.addBuilding(0, 6, -23, 20, 12, 8, 0x74736f);
+    world.addBuilding(0, 6, -23, 20, 12, 8, 0x74736f, { collidable: false });
+    world.addCollisionBox(-5.65, -23, 8.7, 8);
+    world.addCollisionBox(5.65, -23, 8.7, 8);
     world.addBuilding(-12.5, 5.2, 0, 7, 10.4, 42, 0x716c65);
     world.addBuilding(12.5, 5.6, 0, 7, 11.2, 42, 0x6c706e);
 

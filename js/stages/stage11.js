@@ -31,7 +31,10 @@ export const stage11 = {
     this.pathGuides = [
       world.addFloorGuide(1.5, -2.2, 0x80d99a),
       world.addFloorGuide(3.8, 2.5, 0x80d99a),
-      world.addFloorGuide(4.1, 5.7, 0x80d99a)
+      world.addFloorGuide(4.1, 5.7, 0x80d99a),
+      world.addFloorGuide(0.75, 6.7, 0x80d99a),
+      world.addFloorGuide(0.75, 8.25, 0x80d99a),
+      world.addFloorGuide(2.25, 8.45, 0x80d99a)
     ];
     this.safeMarker.visible = false;
     this.pathGuides.forEach((guide) => { guide.visible = false; });

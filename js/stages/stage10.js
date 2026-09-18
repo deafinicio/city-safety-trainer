@@ -26,7 +26,7 @@ export const stage10 = {
     world.addBuilding(14, 5.0, 12, 8, 10, 12, 0x747069);
 
     this.curb = world.addCurbCover(-6.8, -5.2, 9.5, 0);
-    this.safeMarker = world.addSafeZoneMarker(-8.0, -5.2, 0x80d99a);
+    this.safeMarker = world.addSafeZoneMarker(-5.45, -5.2, 0x80d99a);
     this.pathGuides = [
       world.addFloorGuide(-1.8, 9.3, 0x80d99a),
       world.addFloorGuide(-3.5, 4.2, 0x80d99a),
@@ -111,14 +111,14 @@ export const stage10 = {
         state.prone = true;
         state.proneAtMs = world.elapsedMs;
         state.initialCurbDistance = Math.hypot(
-          world.camera.position.x + 8.0,
+          world.camera.position.x + 5.45,
           world.camera.position.z + 5.2
         );
         world.movementSpeedMultiplier = 0.32;
         this.safeMarker.visible = true;
         this.pathGuides.forEach((guide) => { guide.visible = true; });
         world.setMissionInstruction(
-          "Ви лежите. Повзіть за зеленими позначками до заглиблення за бетонним бордюром ліворуч попереду."
+          "Ви лежите. Повзіть за зеленими позначками до заглиблення біля бетонного бордюру ліворуч попереду."
         );
         world.clearDialogue();
       }
@@ -199,7 +199,7 @@ export const stage10 = {
       return;
     }
 
-    const curbDistance = Math.hypot(x + 8.0, z + 5.2);
+    const curbDistance = Math.hypot(x + 5.45, z + 5.2);
     if (state.curbReachedAtMs === null) {
       world.setMissionInstruction(
         `Повзіть за зеленими позначками до бордюру ліворуч попереду — ${Math.max(0, Math.round(curbDistance))} м.`
@@ -224,7 +224,7 @@ export const stage10 = {
       return;
     }
 
-    const inCurbZone = x <= -6.3 && z >= -10.0 && z <= 0.2;
+    const inCurbZone = x >= -6.25 && x <= -4.45 && z >= -9.8 && z <= -0.4;
     if (!inCurbZone) return;
 
     if (state.curbReachedAtMs === null) {
