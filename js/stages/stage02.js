@@ -1,183 +1,158 @@
-export const stage02 = {
-  id: "stage-02",
-  number: 2,
-  title: "Звичайне міське середовище — дистанційне мінування",
-  shortTitle: "Дистанційне мінування",
-  instruction: "Рухайтеся маршрутом і уважно оглядайте міське середовище.",
+import { STAGES } from '../app.js';
 
-  build(world) {
-    world.setBounds({ minX: -7.7, maxX: 7.7, minZ: -27, maxZ: 18 });
-    world.addGround(0x52634f);
-    world.addRoad(0, -4.5, 7.2, 45, 0x777972);
-    world.addRoad(-5.4, -4.5, 2.2, 45, 0x405b3f);
-    world.addRoad(5.4, -4.5, 2.2, 45, 0x405b3f);
-
-    world.addBuilding(-11.2, 4.4, -5, 6, 8.8, 40, 0x76746e);
-    world.addBuilding(11.3, 5, -5, 6, 10, 40, 0x6d706c);
-
-    world.addTree(-5.6, 10);
-    world.addTree(5.5, 7);
-    world.addTree(-5.5, -4);
-    world.addTree(5.6, -9);
-    world.addTree(-5.4, -20);
-    world.addTree(5.4, -22);
-
-    world.addBench(-4.3, 4, Math.PI / 2);
-    world.addBench(4.3, -13, -Math.PI / 2);
-
-    this.mainMine = world.addMine(0.65, -4.8, {
-      rotation: 0.35,
-      color: 0x65714a,
-      partiallyHidden: false
-    });
-
-    this.allMines = [
-      this.mainMine,
-      world.addMine(-4.7, -7.1, {
-        rotation: -0.6,
-        color: 0x455538,
-        partiallyHidden: true
-      }),
-      world.addMine(4.9, -2.7, {
-        rotation: 0.8,
-        color: 0x4c593d,
-        partiallyHidden: true
-      }),
-      world.addMine(-5.2, -15.4, {
-        rotation: 0.15,
-        color: 0x3f5136,
-        partiallyHidden: true
-      }),
-      world.addMine(4.6, -18.2, {
-        rotation: -0.25,
-        color: 0x49563b,
-        partiallyHidden: true
-      })
-    ];
-  },
-
-  reset(world) {
-    world.setPlayerPosition(0, 16);
-    world.clearAction();
-    world.stageState = {
-      detected: false,
-      detectedAtMs: null,
-      detectionPosition: null,
-      stoppedAtMs: null,
-      stopPosition: null,
-      stableStopSeconds: 0,
-      movementAfterDetection: 0,
-      minDistance: Number.POSITIVE_INFINITY,
-      callAtMs: null,
-      trajectory: [],
-      lastTrajectorySample: 0
-    };
-  },
-
-  getMetrics(world) {
-    const state = world.stageState;
-    return {
-      reactionSeconds: state.stoppedAtMs === null || state.detectedAtMs === null
-        ? null
-        : Number(((state.stoppedAtMs - state.detectedAtMs) / 1000).toFixed(1)),
-      callSeconds: state.callAtMs === null || state.detectedAtMs === null
-        ? null
-        : Number(((state.callAtMs - state.detectedAtMs) / 1000).toFixed(1)),
-      minDistance: Number.isFinite(state.minDistance)
-        ? Number(state.minDistance.toFixed(1))
-        : null,
-      movementAfterDetection: Number(state.movementAfterDetection.toFixed(2)),
-      trajectoryPoints: state.trajectory.length
-    };
-  },
-
-  update(world, delta) {
-    const state = world.stageState;
-    const { x, z } = world.camera.position;
-    const now = performance.now();
-
-    for (const mine of this.allMines) {
-      state.minDistance = Math.min(state.minDistance, world.distanceToObject2D(mine));
+export class Stage02 {
+    constructor(game) {
+        this.game = game;
+        this.completed = false;
+        this.timer = null;
+        this.substep = 0;
+        this.dialedNumber = '';
+        this.inputBlocked = false;
     }
 
-    if (now - state.lastTrajectorySample >= 250) {
-      state.lastTrajectorySample = now;
-      state.trajectory.push({
-        x: Number(x.toFixed(2)),
-        z: Number(z.toFixed(2)),
-        timeMs: Math.round(world.elapsedMs)
-      });
+    start() {
+        this.completed = false;
+        this.substep = 0;
+        this.dialedNumber = '';
+        this.inputBlocked = false;
+
+        this.game.setPlayerPosition(0, 0, 8);
+        this.game.setCameraRotation(0, 0);
+
+        this.game.showTask(
+            'Етап 2: Виявлено підозрілий предмет (міна "Пелюстка"). ' +
+            'Ні в якому разі не підходьте! Зупиніться, обережно відійдіть назад на безпечну відстань (не менше 15 метрів) та викличте екстрену службу.'
+        );
+
+        this.setupEventListeners();
     }
 
-    if (state.minDistance < 1.45) {
-      world.fail(
-        "Ви наблизилися до міни на критично небезпечну відстань.",
-        this.getMetrics(world)
-      );
-      return;
+    setupEventListeners() {
+        this.checkPositionInterval = setInterval(() => {
+            if (this.completed) return;
+
+            const playerPos = this.game.getPlayerPosition();
+            const hazardPos = { x: 0, z: -2 };
+            const dist = Math.hypot(playerPos.x - hazardPos.x, playerPos.z - hazardPos.z);
+
+            if (dist < 4.5 && this.substep === 0) {
+                this.game.showWarning('Небезпечно близько! Не підходьте до міни! Відійдіть назад.');
+                if (this.game.audio) this.game.audio.playWarning();
+            }
+
+            if (dist >= 14 && this.substep === 0) {
+                this.substep = 1;
+                this.game.showInfo('Ви на безпечній відстані. Тепер повідомте екстрену службу про знахідку.');
+                this.openPhoneDialer();
+            }
+        }, 200);
     }
 
-    if (!state.detected && world.isObjectVisible(this.mainMine, 15, 0.42)) {
-      state.detected = true;
-      state.detectedAtMs = world.elapsedMs;
-      state.detectionPosition = { x, z };
+    openPhoneDialer() {
+        const existingModal = document.getElementById('stage-phone-modal');
+        if (existingModal) existingModal.remove();
+
+        this.dialedNumber = '';
+
+        const modal = document.createElement('div');
+        modal.id = 'stage-phone-modal';
+        modal.className = 'phone-dialer-backdrop';
+        modal.innerHTML = `
+            <div class="phone-dialer-window">
+                <div class="phone-top-bar">
+                    <span class="phone-network">SOS ONLY</span>
+                    <span class="phone-title">Телефонний виклик</span>
+                </div>
+                <div class="phone-screen-display" id="dialerScreen">_</div>
+                <div class="phone-keyboard-grid">
+                    ${[1, 2, 3, 4, 5, 6, 7, 8, 9, '*', 0, '#'].map(val => `
+                        <button class="phone-key-btn" data-digit="${val}">${val}</button>
+                    `).join('')}
+                </div>
+                <div class="phone-bottom-actions">
+                    <button class="phone-action-btn btn-backspace" id="btnDialerBackspace" title="Стерти">⌫</button>
+                    <button class="phone-action-btn btn-call-trigger" id="btnDialerCall" title="Подзвонити">📞</button>
+                </div>
+                <div class="phone-prompt-tip">Наберіть номер рятувальної служби</div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const screen = modal.querySelector('#dialerScreen');
+
+        modal.querySelectorAll('.phone-key-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (this.inputBlocked) return;
+                const digit = btn.getAttribute('data-digit');
+                if (this.dialedNumber.length < 4) {
+                    this.dialedNumber += digit;
+                    screen.textContent = this.dialedNumber;
+                    if (this.game.audio && this.game.audio.playBeep) {
+                        this.game.audio.playBeep();
+                    }
+                }
+            });
+        });
+
+        modal.querySelector('#btnDialerBackspace').addEventListener('click', () => {
+            if (this.inputBlocked) return;
+            this.dialedNumber = this.dialedNumber.slice(0, -1);
+            screen.textContent = this.dialedNumber || '_';
+        });
+
+        modal.querySelector('#btnDialerCall').addEventListener('click', () => {
+            if (this.inputBlocked) return;
+            this.handleCallSubmission(modal, screen);
+        });
     }
 
-    if (!state.detected) return;
+    handleCallSubmission(modal, screen) {
+        if (this.dialedNumber === '101' || this.dialedNumber === '112') {
+            this.inputBlocked = true;
+            screen.textContent = 'З\'єднання...';
+            if (this.game.audio && this.game.audio.playPhoneRing) {
+                this.game.audio.playPhoneRing();
+            }
 
-    const movedFromDetection = Math.hypot(
-      x - state.detectionPosition.x,
-      z - state.detectionPosition.z
-    );
-    state.movementAfterDetection = Math.max(
-      state.movementAfterDetection,
-      movedFromDetection
-    );
-
-    if (state.stoppedAtMs === null) {
-      if (world.lastInputMagnitude < 0.04) {
-        state.stableStopSeconds += delta;
-
-        if (state.stableStopSeconds >= 0.65) {
-          state.stoppedAtMs = world.elapsedMs;
-          state.stopPosition = { x, z };
-          world.setAction("Повідомити 101/112", () => {
-            state.callAtMs = world.elapsedMs;
-            world.clearAction();
-            world.complete(this.getMetrics(world));
-          });
+            setTimeout(() => {
+                modal.remove();
+                this.game.showSuccess('Вірно! Ви викликали службу порятунку за номером ' + this.dialedNumber + '. Завжди тримайтеся безпечної відстані!');
+                this.finishStage();
+            }, 1200);
+        } else if (this.dialedNumber === '102') {
+            this.inputBlocked = true;
+            screen.textContent = 'Поліція...';
+            setTimeout(() => {
+                modal.remove();
+                this.game.showWarning('Ви викликали поліцію (102). Це прийнятно, але пряма профільна служба розмінування — ДСНС (101) або єдиний номер 112.');
+                this.finishStage();
+            }, 1200);
+        } else {
+            if (this.game.audio && this.game.audio.playError) {
+                this.game.audio.playError();
+            }
+            screen.textContent = 'ПОМИЛКА';
+            this.game.showWarning('Неправильний номер екстреної служби. Наберіть 101 або 112!');
+            setTimeout(() => {
+                this.dialedNumber = '';
+                screen.textContent = '_';
+            }, 900);
         }
-      } else {
-        state.stableStopSeconds = 0;
-      }
-
-      if (world.elapsedMs - state.detectedAtMs > 10000) {
-        world.fail(
-          "Після виявлення небезпеки рух не було припинено протягом рекомендованого часу.",
-          this.getMetrics(world)
-        );
-        return;
-      }
-
-      if (state.movementAfterDetection > 1.6) {
-        world.fail(
-          "Після виявлення міни ви продовжили рух у небезпечному напрямку.",
-          this.getMetrics(world)
-        );
-      }
-      return;
     }
 
-    const movementAfterStop = Math.hypot(
-      x - state.stopPosition.x,
-      z - state.stopPosition.z
-    );
-
-    if (movementAfterStop > 0.35) {
-      world.fail(
-        "Після зупинки не можна продовжувати рух ногами в потенційно замінованій зоні.",
-        this.getMetrics(world)
-      );
+    finishStage() {
+        this.completed = true;
+        this.cleanup();
+        this.game.onStageComplete(2);
     }
-  }
-};
+
+    cleanup() {
+        if (this.checkPositionInterval) {
+            clearInterval(this.checkPositionInterval);
+            this.checkPositionInterval = null;
+        }
+        const modal = document.getElementById('stage-phone-modal');
+        if (modal) modal.remove();
+    }
+}
