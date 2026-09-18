@@ -7,13 +7,14 @@ export const stage02 = {
 
   build(world) {
     world.setBounds({ minX: -7.7, maxX: 7.7, minZ: -27, maxZ: 18 });
-    world.addGround(0x52634f);
-    world.addRoad(0, -4.5, 7.2, 45, 0x777972);
-    world.addRoad(-5.4, -4.5, 2.2, 45, 0x405b3f);
-    world.addRoad(5.4, -4.5, 2.2, 45, 0x405b3f);
+    world.addGround(0x435542);
+    world.addRoad(0, -4.5, 7.2, 45, 0x454a49);
+    world.addPavedWalkway(-5.4, -4.5, 2.2, 45, 0x9b978c);
+    world.addPavedWalkway(5.4, -4.5, 2.2, 45, 0x969388);
 
-    world.addBuilding(-11.2, 4.4, -5, 6, 8.8, 40, 0x76746e);
-    world.addBuilding(11.3, 5, -5, 6, 10, 40, 0x6d706c);
+    world.addBuilding(-11.2, 4.55, -5, 6, 9.1, 40, 0x625a53);
+    world.addBuilding(11.3, 4.55, -5, 6, 9.1, 40, 0x5d5751);
+    world.addPhotorealApartmentFacades();
 
     world.addTree(-5.6, 10);
     world.addTree(5.5, 7);
@@ -24,6 +25,33 @@ export const stage02 = {
 
     world.addBench(-4.3, 4, Math.PI / 2);
     world.addBench(4.3, -13, -Math.PI / 2);
+
+    world.addStageAssetInstances(
+      "assets/models/polyhaven/street_lamp_02/street_lamp_02_1k.glb",
+      [
+        { position: [-6.65, 0, 12.2], rotation: [0, 0.25, 0], scale: 2.7 },
+        { position: [6.65, 0, 4.2], rotation: [0, Math.PI + 0.25, 0], scale: 2.7 },
+        { position: [-6.65, 0, -9.8], rotation: [0, 0.25, 0], scale: 2.7 },
+        { position: [6.65, 0, -19.2], rotation: [0, Math.PI + 0.25, 0], scale: 2.7 }
+      ]
+    );
+
+    world.addStageAssetInstances(
+      "assets/models/polyhaven/shrub_03/shrub_03_1k.glb",
+      [
+        { position: [-7.05, 0.02, 7.5], rotation: [0, Math.PI / 2, 0], scale: 2.35 },
+        { position: [7.05, 0.02, -4.5], rotation: [0, -Math.PI / 2, 0], scale: 2.2 },
+        { position: [-7.05, 0.02, -17.8], rotation: [0, Math.PI / 2, 0], scale: 2.45 }
+      ]
+    );
+
+    world.addStageAssetInstances(
+      "assets/models/polyhaven/water_manhole_cover/water_manhole_cover_1k.glb",
+      [
+        { position: [-1.65, 0.07, 9.1], rotation: [0, 0.2, 0], scale: 1 },
+        { position: [2.1, 0.07, -15.1], rotation: [0, -0.35, 0], scale: 0.92 }
+      ]
+    );
 
     this.mainMine = world.addMine(0.65, -4.8, {
       rotation: 0.35,

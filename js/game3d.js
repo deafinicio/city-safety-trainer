@@ -292,6 +292,118 @@ export class TrainingWorld {
     return { model, animations: gltf.animations };
   }
 
+  async addStageAssetInstances(url, instances, { collidable = false } = {}) {
+    const targetRoot = this.stageRoot;
+
+    try {
+      const gltf = await this.gltfLoader.loadAsync(url);
+      if (targetRoot !== this.stageRoot) return [];
+
+      const models = instances.map((instance) => {
+        const model = gltf.scene.clone(true);
+        const position = instance.position || [0, 0, 0];
+        const rotation = instance.rotation || [0, 0, 0];
+        const scale = instance.scale ?? 1;
+
+        model.position.set(...position);
+        model.rotation.set(...rotation);
+        if (Array.isArray(scale)) model.scale.set(...scale);
+        else model.scale.setScalar(scale);
+        model.updateMatrixWorld(true);
+        this.add(model);
+
+        if (collidable || instance.collidable) {
+          const bounds = new THREE.Box3().setFromObject(model);
+          const size = bounds.getSize(new THREE.Vector3());
+          const center = bounds.getCenter(new THREE.Vector3());
+          this.addCollisionBox(center.x, center.z, size.x, size.z, rotation[1], 0, size.y);
+        }
+
+        return model;
+      });
+
+      return models;
+    } catch (error) {
+      console.warn(`Не вдалося завантажити 3D-ресурс: ${url}`, error);
+      return [];
+    }
+  }
+
+  async addPhotorealApartmentFacades() {
+    const targetRoot = this.stageRoot;
+    const url = "assets/models/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.glb";
+
+    try {
+      const { scene: library } = await this.gltfLoader.loadAsync(url);
+      if (targetRoot !== this.stageRoot) return;
+
+      const materialCopies = new Map();
+      const getMaterial = (material) => {
+        if (!materialCopies.has(material.uuid)) {
+          const copy = material.clone();
+          copy.side = THREE.DoubleSide;
+          copy.envMapIntensity = 0.62;
+          materialCopies.set(material.uuid, copy);
+        }
+        return materialCopies.get(material.uuid);
+      };
+
+      const clonePiece = (name, panelX, panelY, parent) => {
+        const source = library.getObjectByName(name);
+        if (!source) return;
+        const piece = source.clone(false);
+        piece.material = Array.isArray(source.material)
+          ? source.material.map(getMaterial)
+          : getMaterial(source.material);
+        piece.position.set(panelX, panelY, 0);
+        piece.rotation.set(0, 0, 0);
+        piece.scale.set(1, 1, 1);
+        piece.castShadow = true;
+        piece.receiveShadow = true;
+        parent.add(piece);
+      };
+
+      const createFacade = ({ x, z, rotation, doorPanels }) => {
+        const facade = new THREE.Group();
+        const panelCount = 13;
+        const facadeLength = panelCount * 3;
+
+        for (let panel = 0; panel < panelCount; panel += 1) {
+          const panelX = -facadeLength / 2 + (panel + 1) * 3;
+          const hasDoor = doorPanels.includes(panel);
+          const groundWall = hasDoor
+            ? "wall_door_centered_large_01"
+            : "wall_window_centered_large_01";
+          const groundInsert = hasDoor
+            ? "door_centered_large_01"
+            : "window_centered_large_01";
+
+          clonePiece(groundWall, panelX, 0, facade);
+          clonePiece(groundInsert, panelX, 0, facade);
+          clonePiece("base_standard_01", panelX, 0, facade);
+          clonePiece("dado_standard_standard_01", panelX, 0.72, facade);
+
+          for (const floorY of [3, 6]) {
+            clonePiece("wall_window_centered_large_01", panelX, floorY, facade);
+            clonePiece("window_centered_large_01", panelX, floorY, facade);
+          }
+
+          clonePiece("cornice_standard_standard_01", panelX, 8.92, facade);
+          clonePiece("crown_standard_standard_01", panelX, 9.08, facade);
+        }
+
+        facade.position.set(x, 0.03, z);
+        facade.rotation.y = rotation;
+        targetRoot.add(facade);
+      };
+
+      createFacade({ x: -7.98, z: -5, rotation: Math.PI / 2, doorPanels: [2, 8] });
+      createFacade({ x: 8.08, z: -5, rotation: -Math.PI / 2, doorPanels: [4, 10] });
+    } catch (error) {
+      console.warn("Не вдалося завантажити PBR-фасади етапу 2", error);
+    }
+  }
+
   resetPhysicsWorld() {
     this.physicsWorld?.free();
     this.physicsWorld = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
@@ -1094,6 +1206,44 @@ export class TrainingWorld {
     }
 
     return road;
+  }
+
+  addPavedWalkway(x, z, width, depth, color = 0xa39f94) {
+    const walkway = new THREE.Mesh(
+      new THREE.BoxGeometry(width, 0.085, depth),
+      this.createSurfaceMaterial(color, "concrete", {
+        repeatX: Math.max(1, width / 1.6),
+        repeatY: Math.max(1, depth / 1.6),
+        roughness: 0.98,
+        bumpScale: 0.032
+      })
+    );
+    walkway.position.set(x, 0.035, z);
+    walkway.receiveShadow = true;
+    walkway.userData.noShadow = true;
+    this.add(walkway);
+
+    const seamMaterial = new THREE.MeshStandardMaterial({
+      color: 0x5f605b,
+      roughness: 1,
+      transparent: true,
+      opacity: 0.34
+    });
+    for (let offset = -depth / 2 + 1.5; offset < depth / 2; offset += 2) {
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(width - 0.1, 0.004, 0.018), seamMaterial);
+      seam.position.set(x, 0.081, z + offset);
+      seam.userData.noShadow = true;
+      this.add(seam);
+    }
+
+    const centerSeam = new THREE.Mesh(
+      new THREE.BoxGeometry(0.018, 0.004, depth - 0.12),
+      seamMaterial
+    );
+    centerSeam.position.set(x, 0.081, z);
+    centerSeam.userData.noShadow = true;
+    this.add(centerSeam);
+    return walkway;
   }
 
   addCollisionBox(x, z, width, depth, rotation = 0, padding = 0, height = 2.4) {
