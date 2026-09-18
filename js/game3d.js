@@ -1,10 +1,12 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
 import { stage01 } from "./stages/stage01.js";
 import { stage02 } from "./stages/stage02.js";
+import { stage03 } from "./stages/stage03.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
-  [stage02.id, stage02]
+  [stage02.id, stage02],
+  [stage03.id, stage03]
 ]);
 
 export class TrainingWorld {
@@ -392,6 +394,95 @@ export class TrainingWorld {
 
     group.add(leftLobe, rightLobe, center);
     group.position.set(x, partiallyHidden ? -0.035 : 0.055, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addMineWarningSign(x, z, rotation = 0) {
+    const group = new THREE.Group();
+    const postMaterial = new THREE.MeshStandardMaterial({ color: 0x4b4034, roughness: 1 });
+    const boardMaterial = new THREE.MeshStandardMaterial({ color: 0xd9d7ce, roughness: 0.9 });
+
+    for (const postX of [-0.72, 0.72]) {
+      const post = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.07, 2.4, 8),
+        postMaterial
+      );
+      post.position.set(postX, 1.2, 0);
+      group.add(post);
+    }
+
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(1.9, 1.25, 0.1),
+      boardMaterial
+    );
+    board.position.set(0, 1.75, 0);
+    group.add(board);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 340;
+    const context = canvas.getContext("2d");
+
+    context.fillStyle = "#f2eee2";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = "#c92127";
+    context.lineWidth = 30;
+    context.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
+    context.fillStyle = "#171717";
+    context.textAlign = "center";
+    context.font = "900 76px sans-serif";
+    context.fillText("НЕБЕЗПЕЧНО", 256, 105);
+    context.font = "900 112px sans-serif";
+    context.fillText("МІНИ", 256, 235);
+    context.font = "700 48px sans-serif";
+    context.fillText("☠", 256, 305);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.78, 1.13),
+      new THREE.MeshBasicMaterial({ map: texture })
+    );
+    face.position.set(0, 1.75, 0.056);
+    group.add(face);
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addWarningFence(x, z, length, rotation = 0) {
+    const group = new THREE.Group();
+    const postMaterial = new THREE.MeshStandardMaterial({ color: 0x655646, roughness: 1 });
+    const tapeMaterial = new THREE.MeshStandardMaterial({
+      color: 0xc52a2f,
+      emissive: 0x260202,
+      roughness: 0.72
+    });
+
+    const postCount = Math.max(3, Math.ceil(length / 2.2));
+    for (let index = 0; index < postCount; index += 1) {
+      const localX = -length / 2 + (length * index) / (postCount - 1);
+      const post = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.055, 1.35, 7),
+        postMaterial
+      );
+      post.position.set(localX, 0.675, 0);
+      group.add(post);
+    }
+
+    for (const height of [0.62, 1.05]) {
+      const tape = new THREE.Mesh(
+        new THREE.BoxGeometry(length, 0.075, 0.045),
+        tapeMaterial
+      );
+      tape.position.y = height;
+      group.add(tape);
+    }
+
+    group.position.set(x, 0, z);
     group.rotation.y = rotation;
     return this.add(group);
   }
