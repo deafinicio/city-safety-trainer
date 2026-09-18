@@ -9,6 +9,7 @@ const screens = {
 const elements = {
   stage01Button: document.querySelector("#stage-01-button"),
   stage02Button: document.querySelector("#stage-02-button"),
+  stage03Button: document.querySelector("#stage-03-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
@@ -62,6 +63,21 @@ const resultContent = {
         ["Рух після виявлення", metrics.movementAfterDetection + " м"]
       ];
     }
+  },
+  "stage-03": {
+    title: "Обрано безпечніший обхід",
+    message:
+      "Ви розпізнали офіційний знак мінної небезпеки, зупинилися та обійшли позначену територію.",
+    guidance:
+      "Офіційний знак не можна ігнорувати: зупиніться, не перетинайте позначену межу та оберіть безпечніший альтернативний маршрут.",
+    metrics(metrics) {
+      return [
+        ["Виявлення знака", metrics.signDetected ? "зафіксовано" : "не зафіксовано"],
+        ["Час до зупинки", formatSeconds(metrics.reactionSeconds)],
+        ["Обраний маршрут", metrics.route],
+        ["Перетин межі", metrics.crossedBoundary ? "так" : "ні"]
+      ];
+    }
   }
 };
 
@@ -103,7 +119,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-02";
+  elements.nextButton.hidden = stage.id === "stage-03";
   showScreen("result");
 }
 
@@ -157,9 +173,12 @@ function returnToMenu() {
 
 elements.stage01Button.addEventListener("click", () => startTraining("stage-01"));
 elements.stage02Button.addEventListener("click", () => startTraining("stage-02"));
+elements.stage03Button.addEventListener("click", () => startTraining("stage-03"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
 elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
-elements.nextButton.addEventListener("click", () => startTraining("stage-02"));
+elements.nextButton.addEventListener("click", () => {
+  startTraining(currentStageId === "stage-01" ? "stage-02" : "stage-03");
+});
 elements.menuButton.addEventListener("click", returnToMenu);
 elements.exitButton.addEventListener("click", returnToMenu);
 elements.actionButton.addEventListener("click", () => world?.performAction());
