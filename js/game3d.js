@@ -413,7 +413,8 @@ export class TrainingWorld {
       new THREE.CylinderGeometry(0.075, 0.09, 2.7, 10),
       postMaterial
     );
-    post.position.set(0, 1.35, 0);
+    // The support sits behind the opaque board, so it cannot bleed through the sign face.
+    post.position.set(0, 1.35, -0.12);
     group.add(post);
 
     const board = new THREE.Mesh(
