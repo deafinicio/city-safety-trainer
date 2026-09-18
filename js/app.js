@@ -11,6 +11,7 @@ const elements = {
   stage02Button: document.querySelector("#stage-02-button"),
   stage03Button: document.querySelector("#stage-03-button"),
   stage04Button: document.querySelector("#stage-04-button"),
+  stage05Button: document.querySelector("#stage-05-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
@@ -95,6 +96,22 @@ const resultContent = {
         ["Мінімальна дистанція", formatDistance(metrics.minDistance)]
       ];
     }
+  },
+  "stage-05": {
+    title: "Рух припинено правильно",
+    message:
+      "Ви розпізнали зворотну сторону можливого знака мінної небезпеки, залишилися на місці та умовно повідомили 101/112.",
+    guidance:
+      "Якщо видно зворотну сторону знака й існує ризик перебування на замінованій території, потрібно зупинитися, не рухати ногами, не шукати вихід навмання та повідомити 101/112.",
+    metrics(metrics) {
+      return [
+        ["Ознаку розпізнано", metrics.signBackDetected ? "так" : "ні"],
+        ["Час до зупинки", formatSeconds(metrics.reactionSeconds)],
+        ["Час до повідомлення", formatSeconds(metrics.callSeconds)],
+        ["Рух після виявлення", metrics.movementAfterDetection + " м"],
+        ["Послідовність дій", metrics.correctSequence ? "правильна" : "порушена"]
+      ];
+    }
   }
 };
 
@@ -136,7 +153,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-04";
+  elements.nextButton.hidden = stage.id === "stage-05";
   showScreen("result");
 }
 
@@ -192,13 +209,15 @@ elements.stage01Button.addEventListener("click", () => startTraining("stage-01")
 elements.stage02Button.addEventListener("click", () => startTraining("stage-02"));
 elements.stage03Button.addEventListener("click", () => startTraining("stage-03"));
 elements.stage04Button.addEventListener("click", () => startTraining("stage-04"));
+elements.stage05Button.addEventListener("click", () => startTraining("stage-05"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
 elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
 elements.nextButton.addEventListener("click", () => {
   const nextStage = {
     "stage-01": "stage-02",
     "stage-02": "stage-03",
-    "stage-03": "stage-04"
+    "stage-03": "stage-04",
+    "stage-04": "stage-05"
   }[currentStageId];
 
   if (nextStage) startTraining(nextStage);
