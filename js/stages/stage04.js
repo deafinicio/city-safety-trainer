@@ -39,6 +39,10 @@ export const stage04 = {
       stableStopSeconds: 0,
       stoppedAtMs: null,
       warnedOthers: false,
+      safeDistanceReached: false,
+      phoneActionShown: false,
+      callAtMs: null,
+      calledNumber: null,
       crossedBoundary: false,
       minUxoDistance: Number.POSITIVE_INFINITY,
       trajectory: [],
@@ -54,6 +58,11 @@ export const stage04 = {
         ? null
         : Number(((state.stoppedAtMs - state.detectedAtMs) / 1000).toFixed(1)),
       warnedOthers: state.warnedOthers,
+      safeDistanceReached: state.safeDistanceReached,
+      callSeconds: state.callAtMs === null || state.detectedAtMs === null
+        ? null
+        : Number(((state.callAtMs - state.detectedAtMs) / 1000).toFixed(1)),
+      calledNumber: state.calledNumber,
       crossedBoundary: state.crossedBoundary,
       minDistance: Number.isFinite(state.minUxoDistance)
         ? Number(state.minUxoDistance.toFixed(1))
@@ -143,8 +152,21 @@ export const stage04 = {
           "Перед поверненням потрібно було умовно попередити інших про небезпеку.",
           this.getMetrics(world)
         );
-      } else {
-        world.complete(this.getMetrics(world));
+      } else if (!state.phoneActionShown) {
+        state.safeDistanceReached = true;
+        state.phoneActionShown = true;
+        world.setAction("Зателефонувати до екстреної служби", () => {
+          world.clearAction();
+          world.openEmergencyDialer({
+            acceptedNumbers: ["101", "102", "112"],
+            onComplete: (number) => {
+              state.calledNumber = number;
+              state.callAtMs = world.elapsedMs;
+              world.clearDialogue();
+              world.complete(this.getMetrics(world));
+            }
+          });
+        });
       }
     }
   }

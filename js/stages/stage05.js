@@ -56,6 +56,7 @@ export const stage05 = {
       stopPosition: null,
       movementAfterDetection: 0,
       callAtMs: null,
+      calledNumber: null,
       minMineDistance: Number.POSITIVE_INFINITY,
       trajectory: [],
       lastTrajectorySample: 0
@@ -72,6 +73,7 @@ export const stage05 = {
       callSeconds: state.callAtMs === null || state.detectedAtMs === null
         ? null
         : Number(((state.callAtMs - state.detectedAtMs) / 1000).toFixed(1)),
+      calledNumber: state.calledNumber,
       movementAfterDetection: Number(state.movementAfterDetection.toFixed(2)),
       minDistance: Number.isFinite(state.minMineDistance)
         ? Number(state.minMineDistance.toFixed(1))
@@ -135,9 +137,16 @@ export const stage05 = {
           state.stoppedAtMs = world.elapsedMs;
           state.stopPosition = { x, z };
           world.setAction("Повідомити 101/112", () => {
-            state.callAtMs = world.elapsedMs;
             world.clearAction();
-            world.complete(this.getMetrics(world));
+            world.openEmergencyDialer({
+              acceptedNumbers: ["101", "102", "112"],
+              onComplete: (number) => {
+                state.calledNumber = number;
+                state.callAtMs = world.elapsedMs;
+                world.clearDialogue();
+                world.complete(this.getMetrics(world));
+              }
+            });
           });
         }
       } else {

@@ -2792,7 +2792,7 @@ export class TrainingWorld {
     return this.add(group);
   }
 
-  addWarningFence(x, z, length, rotation = 0) {
+  addWarningFence(x, z, length, rotation = 0, { collidable = true } = {}) {
     const group = new THREE.Group();
     const postMaterial = new THREE.MeshStandardMaterial({
       color: 0x655646,
@@ -2836,7 +2836,7 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
-    this.addCollisionBox(x, z, length, 0.18, rotation);
+    if (collidable) this.addCollisionBox(x, z, length, 0.18, rotation);
     return this.add(group);
   }
 
