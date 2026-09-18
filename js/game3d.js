@@ -2,11 +2,13 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.m
 import { stage01 } from "./stages/stage01.js";
 import { stage02 } from "./stages/stage02.js";
 import { stage03 } from "./stages/stage03.js";
+import { stage04 } from "./stages/stage04.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
   [stage02.id, stage02],
-  [stage03.id, stage03]
+  [stage03.id, stage03],
+  [stage04.id, stage04]
 ]);
 
 export class TrainingWorld {
@@ -396,6 +398,105 @@ export class TrainingWorld {
     group.position.set(x, partiallyHidden ? -0.035 : 0.055, z);
     group.rotation.y = rotation;
     return this.add(group);
+  }
+
+  addUnofficialWarning(x, z) {
+    const group = new THREE.Group();
+    const branchMaterial = new THREE.MeshStandardMaterial({
+      color: 0x5a4732,
+      roughness: 1
+    });
+
+    for (const angle of [-0.62, 0.62]) {
+      const branch = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.09, 2.8, 7),
+        branchMaterial
+      );
+      branch.rotation.z = Math.PI / 2;
+      branch.rotation.y = angle;
+      branch.position.y = 0.11;
+      group.add(branch);
+    }
+
+    const hangingBranch = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.07, 2.1, 7),
+      branchMaterial
+    );
+    hangingBranch.rotation.z = Math.PI / 2;
+    hangingBranch.position.set(1.25, 1.85, 0);
+    group.add(hangingBranch);
+
+    const cord = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, 0.65, 6),
+      new THREE.MeshBasicMaterial({ color: 0x29251f })
+    );
+    cord.position.set(1.65, 1.48, 0);
+    group.add(cord);
+
+    const bottleMaterial = new THREE.MeshStandardMaterial({
+      color: 0x4f8b78,
+      transparent: true,
+      opacity: 0.82,
+      roughness: 0.35
+    });
+    const bottle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.13, 0.16, 0.58, 12),
+      bottleMaterial
+    );
+    bottle.position.set(1.65, 1.03, 0);
+
+    const neck = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.055, 0.075, 0.22, 10),
+      bottleMaterial
+    );
+    neck.position.set(1.65, 1.43, 0);
+
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.062, 0.062, 0.06, 10),
+      new THREE.MeshStandardMaterial({ color: 0x2d4e43, roughness: 0.7 })
+    );
+    cap.position.set(1.65, 1.57, 0);
+
+    group.add(bottle, neck, cap);
+    group.position.set(x, 0, z);
+    return this.add(group);
+  }
+
+  addTireTracks(x, z, length) {
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x30382e,
+      roughness: 1
+    });
+
+    for (const offset of [-0.72, 0.72]) {
+      const track = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.3, length),
+        material
+      );
+      track.rotation.x = -Math.PI / 2;
+      track.position.set(x + offset, 0.006, z);
+      this.add(track);
+    }
+  }
+
+  addShellCasings(x, z, count = 8) {
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xa9822d,
+      metalness: 0.55,
+      roughness: 0.45
+    });
+
+    for (let index = 0; index < count; index += 1) {
+      const casing = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.03, 0.16, 8),
+        material
+      );
+      const offsetX = Math.sin(index * 2.17) * 0.85;
+      const offsetZ = Math.cos(index * 1.61) * 1.05;
+      casing.position.set(x + offsetX, 0.05, z + offsetZ);
+      casing.rotation.set(Math.PI / 2, index * 0.83, 0.15);
+      this.add(casing);
+    }
   }
 
   addMineWarningSign(x, z, rotation = 0) {
