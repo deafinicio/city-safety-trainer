@@ -408,3 +408,123 @@ h2 {
     min-height: 0;
   }
 }
+
+
+.stage-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: min(780px, 100%);
+  margin-top: 28px;
+}
+
+.stage-card {
+  display: grid;
+  gap: 8px;
+  min-height: 160px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px;
+  background: var(--surface-soft);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.stage-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  background: #213127;
+}
+
+.stage-card:focus-visible {
+  outline: 3px solid white;
+  outline-offset: 3px;
+}
+
+.stage-card span {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.stage-card strong {
+  font-size: 1.18rem;
+  line-height: 1.25;
+}
+
+.stage-card small {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.action-control {
+  position: absolute;
+  z-index: 24;
+  right: 24px;
+  bottom: 76px;
+  min-height: 52px;
+  border: 2px solid rgba(239, 200, 74, 0.7);
+  border-radius: 14px;
+  padding: 13px 18px;
+  background: rgba(20, 25, 20, 0.9);
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 850;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(10px);
+}
+
+.action-control[hidden] {
+  display: none;
+}
+
+.button--secondary {
+  background: var(--surface-soft);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.button--ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.result-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+@media (max-width: 640px) {
+  .stage-list {
+    grid-template-columns: 1fr;
+  }
+
+  .stage-card {
+    min-height: 130px;
+  }
+
+  .action-control {
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(68px, calc(env(safe-area-inset-bottom) + 58px));
+    max-width: 46vw;
+  }
+
+  .result-actions {
+    display: grid;
+  }
+
+  .result-actions .button {
+    width: 100%;
+  }
+}
