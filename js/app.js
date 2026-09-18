@@ -15,6 +15,7 @@ const elements = {
   stage06Button: document.querySelector("#stage-06-button"),
   stage07Button: document.querySelector("#stage-07-button"),
   stage08Button: document.querySelector("#stage-08-button"),
+  stage09Button: document.querySelector("#stage-09-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
@@ -172,6 +173,23 @@ const resultContent = {
         ["Запасна позиція на землі", metrics.groundPositionChosen ? "обрана" : "не знадобилася"]
       ];
     }
+  },
+  "stage-09": {
+    title: "Мобільного укриття досягнуто",
+    message:
+      "Ви залишили зону скляної зупинки, не рухалися назустріч загрозі та дісталися мобільного укриття.",
+    guidance:
+      "Почувши наближення БПЛА, відійдіть від скла, не рухайтеся назустріч звуку та прямуйте до доступного безпечнішого укриття. Не лягайте поруч зі скляними конструкціями.",
+    metrics(metrics) {
+      return [
+        ["Час вибору дії", formatSeconds(metrics.decisionSeconds)],
+        ["Вихід із зони скла", formatSeconds(metrics.glassExitSeconds)],
+        ["Час до укриття", formatSeconds(metrics.shelterSeconds)],
+        ["Укриття досягнуто", metrics.reachedShelter ? "так" : "ні"],
+        ["Рух назустріч загрозі", metrics.movedTowardThreat ? "так" : "ні"],
+        ["Залишення біля скла", metrics.stayedByGlass ? "так" : "ні"]
+      ];
+    }
   }
 };
 
@@ -213,7 +231,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-08";
+  elements.nextButton.hidden = stage.id === "stage-09";
   showScreen("result");
 }
 
@@ -306,6 +324,7 @@ elements.stage05Button.addEventListener("click", () => startTraining("stage-05")
 elements.stage06Button.addEventListener("click", () => startTraining("stage-06"));
 elements.stage07Button.addEventListener("click", () => startTraining("stage-07"));
 elements.stage08Button.addEventListener("click", () => startTraining("stage-08"));
+elements.stage09Button.addEventListener("click", () => startTraining("stage-09"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
 elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
 elements.nextButton.addEventListener("click", () => {
@@ -316,7 +335,8 @@ elements.nextButton.addEventListener("click", () => {
     "stage-04": "stage-05",
     "stage-05": "stage-06",
     "stage-06": "stage-07",
-    "stage-07": "stage-08"
+    "stage-07": "stage-08",
+    "stage-08": "stage-09"
   }[currentStageId];
 
   if (nextStage) startTraining(nextStage);
