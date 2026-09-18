@@ -16,6 +16,8 @@ const elements = {
   stage07Button: document.querySelector("#stage-07-button"),
   stage08Button: document.querySelector("#stage-08-button"),
   stage09Button: document.querySelector("#stage-09-button"),
+  stage10Button: document.querySelector("#stage-10-button"),
+  stage11Button: document.querySelector("#stage-11-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
@@ -190,6 +192,40 @@ const resultContent = {
         ["Залишення біля скла", metrics.stayedByGlass ? "так" : "ні"]
       ];
     }
+  },
+  "stage-10": {
+    title: "Безпечнішої позиції біля бордюру досягнуто",
+    message:
+      "Ви вчасно припинили рух, зайняли положення лежачи та доповзли до нижчої захисної позиції.",
+    guidance:
+      "Почувши наближення стрілянини на відкритій ділянці, негайно припиніть рух, ляжте, а після оцінки напрямку загрози повзіть до доступного заглиблення або іншої безпечнішої позиції.",
+    metrics(metrics) {
+      return [
+        ["Час до зупинки", formatSeconds(metrics.reactionSeconds)],
+        ["Перехід у положення лежачи", formatSeconds(metrics.proneSeconds)],
+        ["Час до бордюру", formatSeconds(metrics.curbSeconds)],
+        ["Положення лежачи", metrics.prone ? "виконано" : "не виконано"],
+        ["Рух у повний зріст", metrics.movedUpright ? "так" : "ні"],
+        ["Рух до зупинки", formatDistance(metrics.movementBeforeStop)]
+      ];
+    }
+  },
+  "stage-11": {
+    title: "Правило двох стін застосовано",
+    message:
+      "Ви відійшли від вікон, не здійснювали зйомку та перейшли до внутрішньої частини будівлі.",
+    guidance:
+      "Під час стрілянини або роботи ППО відійдіть від вікон і зовнішніх стін, перейдіть у внутрішню частину будівлі або на сходову клітину та не знімайте події назовні.",
+    metrics(metrics) {
+      return [
+        ["Час вибору дії", formatSeconds(metrics.reactionSeconds)],
+        ["Час до зони двох стін", formatSeconds(metrics.safeZoneSeconds)],
+        ["Зони досягнуто", metrics.reachedTwoWalls ? "так" : "ні"],
+        ["Наближення до вікна", metrics.approachedWindow ? "так" : "ні"],
+        ["Фото або відеозйомка", metrics.filmed ? "так" : "ні"],
+        ["Мінімальна відстань до вікна", formatDistance(metrics.minWindowDistance)]
+      ];
+    }
   }
 };
 
@@ -231,7 +267,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-09";
+  elements.nextButton.hidden = stage.id === "stage-11";
   showScreen("result");
 }
 
@@ -325,6 +361,8 @@ elements.stage06Button.addEventListener("click", () => startTraining("stage-06")
 elements.stage07Button.addEventListener("click", () => startTraining("stage-07"));
 elements.stage08Button.addEventListener("click", () => startTraining("stage-08"));
 elements.stage09Button.addEventListener("click", () => startTraining("stage-09"));
+elements.stage10Button.addEventListener("click", () => startTraining("stage-10"));
+elements.stage11Button.addEventListener("click", () => startTraining("stage-11"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
 elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
 elements.nextButton.addEventListener("click", () => {
@@ -336,7 +374,9 @@ elements.nextButton.addEventListener("click", () => {
     "stage-05": "stage-06",
     "stage-06": "stage-07",
     "stage-07": "stage-08",
-    "stage-08": "stage-09"
+    "stage-08": "stage-09",
+    "stage-09": "stage-10",
+    "stage-10": "stage-11"
   }[currentStageId];
 
   if (nextStage) startTraining(nextStage);
