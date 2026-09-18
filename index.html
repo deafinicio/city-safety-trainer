@@ -48,6 +48,12 @@
           <strong>Зворотна сторона знака</strong>
           <small>Повна зупинка без спроб самостійного виходу</small>
         </button>
+
+        <button class="stage-card" id="stage-06-button" type="button">
+          <span>Етап 6</span>
+          <strong>Покинутий рюкзак</strong>
+          <small>Відхід на безпечну відстань і повідомлення 101</small>
+        </button>
       </div>
     </section>
 
@@ -76,6 +82,12 @@
       </div>
 
       <div class="mobile-hint">Ліворуч — рух · праворуч — огляд</div>
+
+      <section class="dialogue-panel" id="dialogue-panel" hidden aria-live="polite">
+        <p class="eyebrow" id="dialogue-title"></p>
+        <h2 id="dialogue-prompt"></h2>
+        <div class="dialogue-options" id="dialogue-options"></div>
+      </section>
 
       <section class="scenario-feedback" id="failure-panel" hidden aria-live="assertive">
         <span class="scenario-feedback__icon" aria-hidden="true">!</span>
