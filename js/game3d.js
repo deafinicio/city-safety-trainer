@@ -4,13 +4,15 @@ import { stage02 } from "./stages/stage02.js";
 import { stage03 } from "./stages/stage03.js";
 import { stage04 } from "./stages/stage04.js";
 import { stage05 } from "./stages/stage05.js";
+import { stage06 } from "./stages/stage06.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
   [stage02.id, stage02],
   [stage03.id, stage03],
   [stage04.id, stage04],
-  [stage05.id, stage05]
+  [stage05.id, stage05],
+  [stage06.id, stage06]
 ]);
 
 export class TrainingWorld {
@@ -22,6 +24,7 @@ export class TrainingWorld {
     onSuccess,
     onFailure,
     onActionChange,
+    onDialogueChange,
     onStageChange
   }) {
     this.canvas = canvas;
@@ -31,6 +34,7 @@ export class TrainingWorld {
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
     this.onActionChange = onActionChange;
+    this.onDialogueChange = onDialogueChange;
     this.onStageChange = onStageChange;
 
     this.scene = new THREE.Scene();
@@ -69,6 +73,10 @@ export class TrainingWorld {
     this.currentStageId = null;
     this.stageState = {};
     this.activeAction = null;
+    this.activeDialogue = null;
+    this.dialogueHandler = null;
+    this.controlsLocked = false;
+    this.audioContext = null;
     this.elapsedMs = 0;
     this.startTime = 0;
     this.lastInputMagnitude = 0;
@@ -132,6 +140,7 @@ export class TrainingWorld {
 
     this.completed = false;
     this.clearAction();
+    this.clearDialogue();
     this.yaw = 0;
     this.pitch = 0;
     this.keys.clear();
@@ -162,6 +171,7 @@ export class TrainingWorld {
     this.completed = true;
     this.stop();
     this.clearAction();
+    this.clearDialogue();
     this.onSuccess?.({
       stage: this.currentStage,
       metrics
@@ -173,6 +183,7 @@ export class TrainingWorld {
     this.completed = true;
     this.stop();
     this.clearAction();
+    this.clearDialogue();
     this.onFailure?.({
       stage: this.currentStage,
       reason,
@@ -194,6 +205,72 @@ export class TrainingWorld {
     if (this.active && this.activeAction) {
       this.activeAction.handler();
     }
+  }
+
+  setDialogue(dialogue, handler) {
+    this.activeDialogue = dialogue;
+    this.dialogueHandler = handler;
+    this.controlsLocked = true;
+    this.keys.clear();
+    this.lastInputMagnitude = 0;
+
+    if (document.pointerLockElement === this.canvas) {
+      document.exitPointerLock?.();
+    }
+
+    this.onDialogueChange?.({
+      visible: true,
+      title: dialogue.title,
+      prompt: dialogue.prompt,
+      options: dialogue.options
+    });
+  }
+
+  chooseDialogue(value) {
+    if (this.activeDialogue && this.dialogueHandler) {
+      this.dialogueHandler(value);
+    }
+  }
+
+  clearDialogue() {
+    this.activeDialogue = null;
+    this.dialogueHandler = null;
+    this.controlsLocked = false;
+    this.onDialogueChange?.({
+      visible: false,
+      title: "",
+      prompt: "",
+      options: []
+    });
+  }
+
+  playAlertTone() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!this.audioContext) {
+      this.audioContext = new AudioContextClass();
+    }
+
+    if (this.audioContext.state === "suspended") {
+      this.audioContext.resume();
+    }
+
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    const startAt = this.audioContext.currentTime;
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(720, startAt);
+    oscillator.frequency.setValueAtTime(880, startAt + 0.12);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.13, startAt + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.32);
+
+    oscillator.connect(gain);
+    gain.connect(this.audioContext.destination);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + 0.34);
   }
 
   add(object) {
@@ -538,6 +615,73 @@ export class TrainingWorld {
       casing.rotation.set(Math.PI / 2, index * 0.83, 0.15);
       this.add(casing);
     }
+  }
+
+  addBackpack(x, z, rotation = 0) {
+    const group = new THREE.Group();
+    const fabric = new THREE.MeshStandardMaterial({
+      color: 0x263f52,
+      roughness: 0.92
+    });
+    const trim = new THREE.MeshStandardMaterial({
+      color: 0x17242e,
+      roughness: 0.84
+    });
+
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.82, 0.95, 0.38),
+      fabric
+    );
+    body.position.y = 0.53;
+    group.add(body);
+
+    const flap = new THREE.Mesh(
+      new THREE.BoxGeometry(0.7, 0.38, 0.08),
+      trim
+    );
+    flap.position.set(0, 0.72, 0.23);
+    flap.rotation.x = -0.12;
+    group.add(flap);
+
+    const pocket = new THREE.Mesh(
+      new THREE.BoxGeometry(0.58, 0.3, 0.14),
+      fabric
+    );
+    pocket.position.set(0, 0.35, 0.27);
+    group.add(pocket);
+
+    const handle = new THREE.Mesh(
+      new THREE.TorusGeometry(0.18, 0.035, 8, 18, Math.PI),
+      trim
+    );
+    handle.position.set(0, 1.04, 0);
+    handle.rotation.z = Math.PI;
+    group.add(handle);
+
+    for (const strapX of [-0.27, 0.27]) {
+      const strap = new THREE.Mesh(
+        new THREE.BoxGeometry(0.09, 0.78, 0.06),
+        trim
+      );
+      strap.position.set(strapX, 0.5, -0.23);
+      group.add(strap);
+    }
+
+    const phone = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 0.035, 0.46),
+      new THREE.MeshStandardMaterial({
+        color: 0x111619,
+        metalness: 0.3,
+        roughness: 0.35
+      })
+    );
+    phone.position.set(0.52, 0.04, 0.08);
+    phone.rotation.y = -0.35;
+    group.add(phone);
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
   }
 
   addMineSignBack(x, z, rotation = 0) {
@@ -971,6 +1115,11 @@ export class TrainingWorld {
   }
 
   updateMovement(delta) {
+    if (this.controlsLocked) {
+      this.lastInputMagnitude = 0;
+      return;
+    }
+
     let forwardInput = 0;
     let rightInput = 0;
 
