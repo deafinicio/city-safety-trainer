@@ -50,8 +50,8 @@ export class TrainingWorld {
     this.onStageChange = onStageChange;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xa4aaa4);
-    this.scene.fog = new THREE.Fog(0xa4aaa4, 34, 86);
+    this.scene.background = new THREE.Color(0x8fa39f);
+    this.scene.fog = new THREE.Fog(0xaebbb5, 38, 104);
 
     this.camera = new THREE.PerspectiveCamera(68, 1, 0.1, 140);
     this.camera.rotation.order = "YXZ";
@@ -63,11 +63,34 @@ export class TrainingWorld {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.scene.add(new THREE.HemisphereLight(0xe7ece8, 0x424942, 2.5));
-    const sun = new THREE.DirectionalLight(0xffedcf, 2.1);
-    sun.position.set(-14, 22, 10);
+    this.scene.add(new THREE.HemisphereLight(0xdcecff, 0x364438, 1.7));
+    const sun = new THREE.DirectionalLight(0xffe2ad, 3.15);
+    sun.position.set(-22, 34, 18);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(
+      window.matchMedia("(pointer: coarse)").matches ? 1024 : 2048,
+      window.matchMedia("(pointer: coarse)").matches ? 1024 : 2048
+    );
+    sun.shadow.camera.left = -34;
+    sun.shadow.camera.right = 34;
+    sun.shadow.camera.top = 38;
+    sun.shadow.camera.bottom = -38;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 95;
+    sun.shadow.bias = -0.00035;
+    sun.shadow.normalBias = 0.035;
     this.scene.add(sun);
+
+    const fillLight = new THREE.DirectionalLight(0xaecbdf, 0.62);
+    fillLight.position.set(18, 12, -24);
+    this.scene.add(fillLight);
+
+    this.addAtmosphere();
 
     this.stageRoot = new THREE.Group();
     this.scene.add(this.stageRoot);
@@ -113,15 +136,32 @@ export class TrainingWorld {
   }
 
   clearStage() {
+    const textures = new Set();
     this.stageRoot.traverse((object) => {
       object.geometry?.dispose();
 
       if (Array.isArray(object.material)) {
-        object.material.forEach((material) => material.dispose());
+        object.material.forEach((material) => {
+          [material.map, material.bumpMap, material.normalMap, material.roughnessMap]
+            .filter(Boolean)
+            .forEach((texture) => textures.add(texture));
+          material.dispose();
+        });
       } else {
+        if (object.material) {
+          [
+            object.material.map,
+            object.material.bumpMap,
+            object.material.normalMap,
+            object.material.roughnessMap
+          ]
+            .filter(Boolean)
+            .forEach((texture) => textures.add(texture));
+        }
         object.material?.dispose();
       }
     });
+    textures.forEach((texture) => texture.dispose());
 
     this.scene.remove(this.stageRoot);
     this.stageRoot = new THREE.Group();
@@ -519,7 +559,190 @@ export class TrainingWorld {
     }
   }
 
+  addAtmosphere() {
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(118, 32, 18),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        uniforms: {
+          topColor: { value: new THREE.Color(0x6f91a6) },
+          horizonColor: { value: new THREE.Color(0xc8d2ce) },
+          lowColor: { value: new THREE.Color(0x87958d) }
+        },
+        vertexShader: `
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 topColor;
+          uniform vec3 horizonColor;
+          uniform vec3 lowColor;
+          varying vec3 vWorldPosition;
+          void main() {
+            float height = normalize(vWorldPosition + vec3(0.0, 18.0, 0.0)).y;
+            float upperMix = smoothstep(0.0, 0.78, max(height, 0.0));
+            float lowerMix = smoothstep(-0.35, 0.04, height);
+            vec3 lowerSky = mix(lowColor, horizonColor, lowerMix);
+            gl_FragColor = vec4(mix(lowerSky, topColor, upperMix), 1.0);
+          }
+        `
+      })
+    );
+    sky.frustumCulled = false;
+    this.scene.add(sky);
+
+    const sunCanvas = document.createElement("canvas");
+    sunCanvas.width = 128;
+    sunCanvas.height = 128;
+    const sunContext = sunCanvas.getContext("2d");
+    const gradient = sunContext.createRadialGradient(64, 64, 2, 64, 64, 62);
+    gradient.addColorStop(0, "rgba(255, 247, 210, 1)");
+    gradient.addColorStop(0.18, "rgba(255, 224, 156, 0.92)");
+    gradient.addColorStop(0.55, "rgba(255, 210, 135, 0.22)");
+    gradient.addColorStop(1, "rgba(255, 205, 125, 0)");
+    sunContext.fillStyle = gradient;
+    sunContext.fillRect(0, 0, 128, 128);
+    const sunTexture = new THREE.CanvasTexture(sunCanvas);
+    sunTexture.colorSpace = THREE.SRGBColorSpace;
+    const sunSprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: sunTexture,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      })
+    );
+    sunSprite.position.set(-58, 54, -74);
+    sunSprite.scale.set(18, 18, 1);
+    this.scene.add(sunSprite);
+  }
+
+  visualRandom(x, z, salt = 0) {
+    const value = Math.sin(x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453;
+    return value - Math.floor(value);
+  }
+
+  createSurfaceTexture(surface, repeatX = 1, repeatY = 1) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+    const context = canvas.getContext("2d");
+    const image = context.createImageData(256, 256);
+    const contrast = {
+      ground: 34,
+      asphalt: 20,
+      concrete: 24,
+      wall: 16,
+      wood: 26
+    }[surface] ?? 18;
+    let seed = Array.from(surface).reduce((total, char) => total + char.charCodeAt(0), 2166136261);
+    const random = () => {
+      seed ^= seed << 13;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      return (seed >>> 0) / 4294967295;
+    };
+
+    for (let index = 0; index < image.data.length; index += 4) {
+      const broadNoise = (random() - 0.5) * contrast;
+      const fineNoise = (random() - 0.5) * contrast * 0.4;
+      const value = Math.max(120, Math.min(250, 220 + broadNoise + fineNoise));
+      image.data[index] = value;
+      image.data[index + 1] = value;
+      image.data[index + 2] = value;
+      image.data[index + 3] = 255;
+    }
+    context.putImageData(image, 0, 0);
+
+    if (surface === "ground") {
+      context.strokeStyle = "rgba(42, 55, 38, 0.22)";
+      context.lineWidth = 1;
+      for (let index = 0; index < 180; index += 1) {
+        const x = random() * 256;
+        const y = random() * 256;
+        context.beginPath();
+        context.moveTo(x, y);
+        context.lineTo(x + (random() - 0.5) * 5, y - 2 - random() * 5);
+        context.stroke();
+      }
+    }
+
+    if (surface === "asphalt" || surface === "concrete") {
+      context.strokeStyle = surface === "asphalt"
+        ? "rgba(45, 48, 48, 0.2)"
+        : "rgba(95, 92, 85, 0.16)";
+      context.lineWidth = 1;
+      for (let index = 0; index < 9; index += 1) {
+        let x = random() * 256;
+        let y = random() * 256;
+        context.beginPath();
+        context.moveTo(x, y);
+        for (let segment = 0; segment < 4; segment += 1) {
+          x += (random() - 0.5) * 24;
+          y += 5 + random() * 15;
+          context.lineTo(x, y);
+        }
+        context.stroke();
+      }
+    }
+
+    if (surface === "wall") {
+      const stain = context.createLinearGradient(0, 0, 0, 256);
+      stain.addColorStop(0, "rgba(255,255,255,0.1)");
+      stain.addColorStop(0.7, "rgba(255,255,255,0)");
+      stain.addColorStop(1, "rgba(54,46,38,0.16)");
+      context.fillStyle = stain;
+      context.fillRect(0, 0, 256, 256);
+    }
+
+    if (surface === "wood") {
+      for (let y = 8; y < 256; y += 13) {
+        context.strokeStyle = `rgba(68, 43, 25, ${0.08 + random() * 0.08})`;
+        context.beginPath();
+        context.moveTo(0, y + random() * 4);
+        context.bezierCurveTo(70, y - 4, 170, y + 5, 256, y + random() * 3);
+        context.stroke();
+      }
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(Math.max(1, repeatX), Math.max(1, repeatY));
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+    return texture;
+  }
+
+  createSurfaceMaterial(
+    color,
+    surface,
+    { roughness = 0.92, metalness = 0, repeatX = 1, repeatY = 1, bumpScale = 0.025 } = {}
+  ) {
+    const texture = this.createSurfaceTexture(surface, repeatX, repeatY);
+    return new THREE.MeshStandardMaterial({
+      color,
+      map: texture,
+      bumpMap: texture,
+      bumpScale,
+      roughness,
+      metalness
+    });
+  }
+
   add(object) {
+    object.traverse?.((child) => {
+      if (!child.isMesh) return;
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      const transparent = materials.some((material) => material?.transparent && material.opacity < 0.95);
+      child.castShadow = !transparent && !child.userData.noShadow;
+      child.receiveShadow = !child.userData.noReceiveShadow;
+    });
     this.stageRoot.add(object);
     return object;
   }
@@ -535,20 +758,32 @@ export class TrainingWorld {
   addGround(color) {
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(110, 110),
-      new THREE.MeshStandardMaterial({ color, roughness: 1 })
+      this.createSurfaceMaterial(color, "ground", {
+        repeatX: 28,
+        repeatY: 28,
+        roughness: 1,
+        bumpScale: 0.055
+      })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.03;
+    ground.userData.noShadow = true;
     return this.add(ground);
   }
 
   addRoad(x, z, width, depth, color) {
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
-      new THREE.MeshStandardMaterial({ color, roughness: 1 })
+      new THREE.PlaneGeometry(width, depth, Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(depth / 3))),
+      this.createSurfaceMaterial(color, "asphalt", {
+        repeatX: Math.max(1, width / 2.4),
+        repeatY: Math.max(1, depth / 2.4),
+        roughness: 0.97,
+        bumpScale: 0.035
+      })
     );
     road.rotation.x = -Math.PI / 2;
     road.position.set(x, 0, z);
+    road.userData.noShadow = true;
     return this.add(road);
   }
 
@@ -574,25 +809,91 @@ export class TrainingWorld {
   addBuilding(x, y, z, width, height, depth, color, { collidable = true } = {}) {
     const building = new THREE.Mesh(
       new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.95 })
+      this.createSurfaceMaterial(color, "wall", {
+        repeatX: Math.max(1, width / 2.8),
+        repeatY: Math.max(1, height / 2.8),
+        roughness: 0.94,
+        bumpScale: 0.018
+      })
     );
     building.position.set(x, y, z);
     this.add(building);
 
-    const windowMaterial = new THREE.MeshBasicMaterial({ color: 0x202827 });
-    const facadeX = x > 0 ? x - width / 2 - 0.012 : x + width / 2 + 0.012;
+    const frameMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd0cec4,
+      roughness: 0.72,
+      metalness: 0.05
+    });
+    const sillMaterial = new THREE.MeshStandardMaterial({ color: 0x8c8b85, roughness: 0.88 });
+    const faceOnX = Math.abs(x) >= Math.abs(z);
+    const faceDirection = faceOnX ? (x > 0 ? -1 : 1) : (z > 0 ? -1 : 1);
+    const faceLength = faceOnX ? depth : width;
 
     for (let floor = 1.8; floor < height - 0.7; floor += 2.1) {
-      for (let offset = -depth / 2 + 2; offset < depth / 2 - 1; offset += 3.2) {
+      for (let offset = -faceLength / 2 + 2; offset < faceLength / 2 - 1; offset += 3.2) {
+        const lit = this.visualRandom(x + floor, z + offset, 4) > 0.77;
+        const windowMaterial = new THREE.MeshStandardMaterial({
+          color: lit ? 0xb8a36f : 0x26343a,
+          emissive: lit ? 0x5d431d : 0x071014,
+          emissiveIntensity: lit ? 0.72 : 0.16,
+          roughness: 0.22,
+          metalness: 0.12
+        });
         const windowMesh = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.8, 0.95),
+          new THREE.PlaneGeometry(0.92, 1.08),
           windowMaterial
         );
-        windowMesh.position.set(facadeX, floor, z + offset);
-        windowMesh.rotation.y = x > 0 ? -Math.PI / 2 : Math.PI / 2;
+
+        if (faceOnX) {
+          windowMesh.position.set(x + faceDirection * (width / 2 + 0.012), floor, z + offset);
+          windowMesh.rotation.y = faceDirection < 0 ? -Math.PI / 2 : Math.PI / 2;
+        } else {
+          windowMesh.position.set(x + offset, floor, z + faceDirection * (depth / 2 + 0.012));
+          windowMesh.rotation.y = faceDirection < 0 ? Math.PI : 0;
+        }
         this.add(windowMesh);
+
+        const frame = new THREE.Group();
+        const frameDepth = 0.075;
+        for (const side of [-1, 1]) {
+          const vertical = new THREE.Mesh(new THREE.BoxGeometry(0.065, 1.17, frameDepth), frameMaterial);
+          vertical.position.x = side * 0.49;
+          frame.add(vertical);
+        }
+        for (const side of [-1, 1]) {
+          const horizontal = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.065, frameDepth), frameMaterial);
+          horizontal.position.y = side * 0.585;
+          frame.add(horizontal);
+        }
+        const crossbar = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.08, frameDepth), frameMaterial);
+        frame.add(crossbar);
+        const sill = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.08, 0.16), sillMaterial);
+        sill.position.set(0, -0.65, 0.035);
+        frame.add(sill);
+        frame.position.copy(windowMesh.position);
+        frame.rotation.copy(windowMesh.rotation);
+        this.add(frame);
       }
     }
+
+    const roofCap = new THREE.Mesh(
+      new THREE.BoxGeometry(width + 0.22, 0.18, depth + 0.22),
+      this.createSurfaceMaterial(0x6d706d, "concrete", {
+        repeatX: Math.max(1, width / 3),
+        repeatY: Math.max(1, depth / 3),
+        roughness: 0.98,
+        bumpScale: 0.025
+      })
+    );
+    roofCap.position.set(x, y + height / 2 + 0.09, z);
+    this.add(roofCap);
+
+    const utilityBox = new THREE.Mesh(
+      new THREE.BoxGeometry(Math.min(2.4, width * 0.34), 0.75, Math.min(2.2, depth * 0.18)),
+      new THREE.MeshStandardMaterial({ color: 0x747a77, roughness: 0.82, metalness: 0.12 })
+    );
+    utilityBox.position.set(x + width * 0.14, y + height / 2 + 0.55, z - depth * 0.12);
+    this.add(utilityBox);
 
     if (collidable) this.addCollisionBox(x, z, width, depth);
     return building;
@@ -600,12 +901,30 @@ export class TrainingWorld {
 
   addBrokenWall(x, z, width, depth, height, rotation) {
     const wall = new THREE.Mesh(
-      new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshStandardMaterial({ color: 0x77736d, roughness: 1 })
+      new THREE.BoxGeometry(width, height, depth, Math.max(1, Math.round(width)), 1, 1),
+      this.createSurfaceMaterial(0x77736d, "concrete", {
+        repeatX: Math.max(1, width / 1.4),
+        repeatY: Math.max(1, height / 1.4),
+        roughness: 1,
+        bumpScale: 0.045
+      })
     );
     wall.position.set(x, height / 2, z);
     wall.rotation.y = rotation;
     this.add(wall);
+
+    const rebarMaterial = new THREE.MeshStandardMaterial({
+      color: 0x4a3b32,
+      roughness: 0.72,
+      metalness: 0.55
+    });
+    for (const side of [-0.32, 0.1, 0.38]) {
+      const rebar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 0.75, 6), rebarMaterial);
+      rebar.position.set(x + side * width, height + 0.24, z);
+      rebar.rotation.z = 0.08 + side * 0.18;
+      rebar.rotation.y = rotation;
+      this.add(rebar);
+    }
 
     this.addCollisionBox(x, z, width, depth, rotation);
 
@@ -615,23 +934,28 @@ export class TrainingWorld {
   addRubble(x, z, width, depth, height, color) {
     const base = new THREE.Mesh(
       new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshStandardMaterial({ color, roughness: 1 })
+      this.createSurfaceMaterial(color, "concrete", {
+        repeatX: Math.max(1, width / 1.4),
+        repeatY: Math.max(1, depth / 1.4),
+        roughness: 1,
+        bumpScale: 0.055
+      })
     );
     base.position.set(x, height / 2, z);
     base.rotation.y = 0.08;
     this.add(base);
 
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 9; index += 1) {
       const chunk = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(0.35 + index * 0.07, 0),
+        new THREE.DodecahedronGeometry(0.22 + this.visualRandom(x, z, index) * 0.48, 0),
         new THREE.MeshStandardMaterial({ color: index % 2 ? 0x655f58 : 0x817a70 })
       );
       chunk.position.set(
-        x - width * 0.35 + index * width * 0.23,
-        height + 0.2,
-        z + (index % 2 ? depth * 0.22 : -depth * 0.2)
+        x + (this.visualRandom(x, z, index + 10) - 0.5) * width * 0.85,
+        height + 0.12 + this.visualRandom(x, z, index + 20) * 0.34,
+        z + (this.visualRandom(x, z, index + 30) - 0.5) * depth * 0.78
       );
-      chunk.rotation.set(index * 0.2, index * 0.45, 0.2);
+      chunk.rotation.set(index * 0.31, index * 0.47, index * 0.17);
       this.add(chunk);
     }
 
@@ -641,39 +965,97 @@ export class TrainingWorld {
   }
 
   addTree(x, z) {
+    const group = new THREE.Group();
+    const heightVariation = 0.88 + this.visualRandom(x, z, 1) * 0.3;
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18, 0.25, 2.7, 8),
-      new THREE.MeshStandardMaterial({ color: 0x514535 })
+      new THREE.CylinderGeometry(0.15, 0.29, 2.85 * heightVariation, 10),
+      this.createSurfaceMaterial(0x5a4632, "wood", {
+        repeatX: 2,
+        repeatY: 5,
+        roughness: 1,
+        bumpScale: 0.055
+      })
     );
-    trunk.position.set(x, 1.35, z);
+    trunk.position.y = 1.42 * heightVariation;
+    trunk.rotation.z = (this.visualRandom(x, z, 2) - 0.5) * 0.055;
+    group.add(trunk);
 
-    const crown = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.18, 1),
-      new THREE.MeshStandardMaterial({ color: 0x384c39, roughness: 1 })
-    );
-    crown.position.set(x, 3.25, z);
-    this.add(trunk);
-    this.add(crown);
+    const branchMaterial = new THREE.MeshStandardMaterial({ color: 0x55412f, roughness: 1 });
+    for (const [offsetX, offsetZ, tilt] of [[-0.32, 0.05, -0.55], [0.29, -0.12, 0.5]]) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.09, 1.25, 7), branchMaterial);
+      branch.position.set(offsetX * 0.62, 2.35 * heightVariation, offsetZ);
+      branch.rotation.z = tilt;
+      branch.rotation.x = offsetZ * 0.8;
+      group.add(branch);
+    }
+
+    const foliageColors = [0x304a35, 0x3d5a3e, 0x496847];
+    const foliageLayout = [
+      [0, 3.35, 0, 1.2],
+      [-0.68, 3.15, 0.12, 0.86],
+      [0.65, 3.18, -0.08, 0.92],
+      [0.08, 3.78, 0.18, 0.82]
+    ];
+    foliageLayout.forEach(([offsetX, offsetY, offsetZ, radius], index) => {
+      const crown = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(radius * heightVariation, 1),
+        new THREE.MeshStandardMaterial({
+          color: foliageColors[(index + Math.floor(this.visualRandom(x, z, 5) * 3)) % foliageColors.length],
+          roughness: 0.96,
+          flatShading: true
+        })
+      );
+      crown.position.set(offsetX, offsetY * heightVariation, offsetZ);
+      crown.rotation.set(index * 0.24, index * 0.71, index * 0.16);
+      group.add(crown);
+    });
+
+    group.position.set(x, 0, z);
+    this.add(group);
     this.addCollisionCircle(x, z, 0.34);
   }
 
   addBench(x, z, rotation = 0) {
     const group = new THREE.Group();
-    const wood = new THREE.MeshStandardMaterial({ color: 0x68513c, roughness: 0.9 });
-    const metal = new THREE.MeshStandardMaterial({ color: 0x303532, roughness: 0.7 });
+    const wood = this.createSurfaceMaterial(0x76553a, "wood", {
+      repeatX: 4,
+      repeatY: 1,
+      roughness: 0.88,
+      bumpScale: 0.028
+    });
+    const metal = new THREE.MeshStandardMaterial({ color: 0x2e3432, roughness: 0.54, metalness: 0.42 });
 
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.48), wood);
-    seat.position.y = 0.55;
-    const back = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.7, 0.1), wood);
-    back.position.set(0, 0.9, 0.2);
-
-    for (const legX of [-0.65, 0.65]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.1), metal);
-      leg.position.set(legX, 0.28, 0);
-      group.add(leg);
+    for (let slat = 0; slat < 4; slat += 1) {
+      const seatSlat = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.1, 0.105), wood);
+      seatSlat.position.set(0, 0.58, -0.19 + slat * 0.13);
+      group.add(seatSlat);
     }
 
-    group.add(seat, back);
+    for (let slat = 0; slat < 3; slat += 1) {
+      const backSlat = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.16, 0.08), wood);
+      backSlat.position.set(0, 0.79 + slat * 0.22, 0.25);
+      backSlat.rotation.x = -0.08;
+      group.add(backSlat);
+    }
+
+    for (const legX of [-0.65, 0.65]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.58, 0.1), metal);
+      leg.position.set(legX, 0.29, -0.02);
+      group.add(leg);
+
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.58), metal);
+      brace.position.set(legX, 0.42, 0.03);
+      group.add(brace);
+
+      const backSupport = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.74, 0.08), metal);
+      backSupport.position.set(legX, 0.84, 0.22);
+      backSupport.rotation.x = -0.08;
+      group.add(backSupport);
+    }
+
+    const crossBrace = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.07, 0.07), metal);
+    crossBrace.position.set(0, 0.31, 0);
+    group.add(crossBrace);
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
     this.addCollisionBox(x, z, 1.9, 0.62, rotation);
@@ -1057,25 +1439,85 @@ export class TrainingWorld {
 
   addParkedCar(x, z, rotation = 0, color = 0x4b6170) {
     const group = new THREE.Group();
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.2 });
-    const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x26383e, roughness: 0.28 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.38, metalness: 0.48 });
+    const glassMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x26383e,
+      roughness: 0.12,
+      metalness: 0.15,
+      clearcoat: 0.72,
+      clearcoatRoughness: 0.18
+    });
     const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x171a19, roughness: 0.9 });
+    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x232725, roughness: 0.5, metalness: 0.5 });
+    const lightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf2e8c8,
+      emissive: 0x8f7743,
+      emissiveIntensity: 0.35,
+      roughness: 0.2
+    });
+    const rearLightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xa81f24,
+      emissive: 0x4c080b,
+      emissiveIntensity: 0.28,
+      roughness: 0.24
+    });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.52, 3.5), bodyMaterial);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.5, 3.48), bodyMaterial);
     body.position.y = 0.62;
     group.add(body);
 
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.7, 1.75), glassMaterial);
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.18, 1.02), bodyMaterial);
+    hood.position.set(0, 0.91, -1.2);
+    hood.rotation.x = -0.035;
+    group.add(hood);
+
+    const trunk = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.2, 0.72), bodyMaterial);
+    trunk.position.set(0, 0.88, 1.39);
+    group.add(trunk);
+
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.68, 1.65), glassMaterial);
     cabin.position.set(0, 1.18, -0.15);
     group.add(cabin);
 
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.09, 1.58), bodyMaterial);
+    roof.position.set(0, 1.55, -0.14);
+    group.add(roof);
+
     for (const wheelX of [-0.92, 0.92]) {
       for (const wheelZ of [-1.15, 1.15]) {
-        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.18, 14), tireMaterial);
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 18), tireMaterial);
         wheel.position.set(wheelX, 0.34, wheelZ);
         wheel.rotation.z = Math.PI / 2;
         group.add(wheel);
+
+        const hub = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.15, 0.15, 0.212, 12),
+          new THREE.MeshStandardMaterial({ color: 0x8a8e8d, roughness: 0.34, metalness: 0.72 })
+        );
+        hub.position.copy(wheel.position);
+        hub.rotation.z = Math.PI / 2;
+        group.add(hub);
       }
+    }
+
+    for (const side of [-1, 1]) {
+      const headlight = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.2, 0.07), lightMaterial);
+      headlight.position.set(side * 0.56, 0.72, -1.77);
+      group.add(headlight);
+
+      const tailLight = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.07), rearLightMaterial);
+      tailLight.position.set(side * 0.58, 0.73, 1.77);
+      group.add(tailLight);
+
+      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.16), trimMaterial);
+      mirror.position.set(side * 0.91, 1.25, -0.66);
+      group.add(mirror);
+    }
+
+    for (const end of [-1, 1]) {
+      const bumper = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.12, 0.11), trimMaterial);
+      bumper.position.set(0, 0.42, end * 1.79);
+      group.add(bumper);
     }
 
     group.position.set(x, 0, z);
@@ -1228,7 +1670,12 @@ export class TrainingWorld {
 
   addMobileShelter(x, z, rotation = 0) {
     const group = new THREE.Group();
-    const concrete = new THREE.MeshStandardMaterial({ color: 0x8a8c87, roughness: 0.98 });
+    const concrete = this.createSurfaceMaterial(0x8a8c87, "concrete", {
+      repeatX: 3,
+      repeatY: 4,
+      roughness: 0.99,
+      bumpScale: 0.055
+    });
     const dark = new THREE.MeshBasicMaterial({ color: 0x111514 });
     const white = new THREE.MeshStandardMaterial({ color: 0xf0eee7, roughness: 0.8 });
     const red = new THREE.MeshStandardMaterial({ color: 0xc9232b, roughness: 0.65 });
@@ -1301,8 +1748,18 @@ export class TrainingWorld {
 
   addCurbCover(x, z, length = 9, rotation = 0) {
     const group = new THREE.Group();
-    const concrete = new THREE.MeshStandardMaterial({ color: 0xa09e93, roughness: 1 });
-    const lowGround = new THREE.MeshStandardMaterial({ color: 0x454b42, roughness: 1 });
+    const concrete = this.createSurfaceMaterial(0xa09e93, "concrete", {
+      repeatX: 1,
+      repeatY: Math.max(2, length / 1.4),
+      roughness: 1,
+      bumpScale: 0.045
+    });
+    const lowGround = this.createSurfaceMaterial(0x454b42, "ground", {
+      repeatX: 3,
+      repeatY: Math.max(2, length / 1.8),
+      roughness: 1,
+      bumpScale: 0.05
+    });
 
     const curb = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.38, length), concrete);
     curb.position.y = 0.19;
@@ -1401,8 +1858,13 @@ export class TrainingWorld {
 
   addInteriorFloor(width, depth, color = 0x77766f) {
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.96 })
+      new THREE.PlaneGeometry(width, depth, Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(depth / 2))),
+      this.createSurfaceMaterial(color, "concrete", {
+        repeatX: Math.max(2, width / 2.5),
+        repeatY: Math.max(2, depth / 2.5),
+        roughness: 0.96,
+        bumpScale: 0.025
+      })
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = 0;
@@ -1412,7 +1874,12 @@ export class TrainingWorld {
   addInteriorCeiling(width, depth) {
     const ceiling = new THREE.Mesh(
       new THREE.BoxGeometry(width, 0.2, depth),
-      new THREE.MeshStandardMaterial({ color: 0x8f8e87, roughness: 0.96 })
+      this.createSurfaceMaterial(0x8f8e87, "wall", {
+        repeatX: Math.max(2, width / 3),
+        repeatY: Math.max(2, depth / 3),
+        roughness: 0.96,
+        bumpScale: 0.012
+      })
     );
     ceiling.position.y = 4.2;
     this.add(ceiling);
@@ -1426,6 +1893,10 @@ export class TrainingWorld {
       const light = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.05, 0.42), lightMaterial);
       light.position.set(0, 4.08, z);
       this.add(light);
+
+      const pointLight = new THREE.PointLight(0xfff0c8, 1.2, 7.5, 2);
+      pointLight.position.set(0, 3.82, z);
+      this.add(pointLight);
     }
     return ceiling;
   }
@@ -1433,7 +1904,12 @@ export class TrainingWorld {
   addInteriorWall(x, z, width, depth, height, color = 0xaaa79d) {
     const wall = new THREE.Mesh(
       new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.94 })
+      this.createSurfaceMaterial(color, "wall", {
+        repeatX: Math.max(1, width / 2.4),
+        repeatY: Math.max(1, height / 2.2),
+        roughness: 0.94,
+        bumpScale: 0.015
+      })
     );
     wall.position.set(x, height / 2, z);
     this.add(wall);
@@ -1448,7 +1924,12 @@ export class TrainingWorld {
 
   addWindowedWall(z, width = 15.5) {
     const group = new THREE.Group();
-    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xaaa79d, roughness: 0.95 });
+    const wallMaterial = this.createSurfaceMaterial(0xaaa79d, "wall", {
+      repeatX: Math.max(2, width / 2.5),
+      repeatY: 2,
+      roughness: 0.95,
+      bumpScale: 0.014
+    });
     const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xe2e0d7, roughness: 0.75 });
     const glassMaterial = new THREE.MeshStandardMaterial({
       color: 0x7794a0,
@@ -1490,7 +1971,12 @@ export class TrainingWorld {
 
   addStairwell(x, z) {
     const group = new THREE.Group();
-    const concrete = new THREE.MeshStandardMaterial({ color: 0x8e908b, roughness: 1 });
+    const concrete = this.createSurfaceMaterial(0x8e908b, "concrete", {
+      repeatX: 3,
+      repeatY: 3,
+      roughness: 1,
+      bumpScale: 0.042
+    });
     const rail = new THREE.MeshStandardMaterial({ color: 0x343a38, roughness: 0.7, metalness: 0.25 });
 
     const back = new THREE.Mesh(new THREE.BoxGeometry(5.5, 4.2, 0.28), concrete);
