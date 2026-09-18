@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101813">
+  <meta name="description" content="Браузерний навчальний тренажер із безпечної поведінки у міському середовищі.">
+  <title>Безпечне місто — навчальний тренажер</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="app" id="app">
+    <section class="screen screen--active" id="start-screen" aria-labelledby="game-title">
+      <p class="eyebrow">Інтерактивний навчальний тренажер</p>
+      <h1 id="game-title">Безпечне місто</h1>
+      <p class="lead">
+        Пройдіть змодельовані міські ситуації, розпізнайте загрози
+        та оберіть безпечніший алгоритм дій.
+      </p>
+
+      <div class="notice" role="note">
+        <strong>Навчальний формат.</strong>
+        Тренажер не замінює офіційних інструкцій екстрених служб.
+      </div>
+
+      <button class="button button--primary" id="start-button" type="button">
+        Почати тренування
+      </button>
+    </section>
+
+    <section class="screen" id="scene-screen" aria-live="polite" aria-labelledby="scene-title">
+      <header class="scene-header">
+        <span class="scene-counter" id="scene-counter"></span>
+        <span class="score">Бали: <strong id="score">0</strong></span>
+      </header>
+
+      <div class="scene-visual" id="scene-visual" role="img"></div>
+
+      <div class="scene-content">
+        <p class="eyebrow" id="scene-location"></p>
+        <h2 id="scene-title"></h2>
+        <p id="scene-description"></p>
+        <div class="actions" id="scene-actions"></div>
+        <div class="feedback" id="feedback" hidden></div>
+      </div>
+    </section>
+
+    <section class="screen" id="result-screen" aria-labelledby="result-title">
+      <p class="eyebrow">Результат прототипу</p>
+      <h2 id="result-title">Сцену завершено</h2>
+      <p class="result-score"><span id="final-score">0</span> балів</p>
+      <p id="result-message"></p>
+      <button class="button button--primary" id="restart-button" type="button">
+        Пройти ще раз
+      </button>
+    </section>
+  </main>
+
+  <noscript>Для роботи тренажера потрібно ввімкнути JavaScript.</noscript>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
