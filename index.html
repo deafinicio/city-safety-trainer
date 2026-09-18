@@ -7,6 +7,14 @@
   <meta name="description" content="Браузерний 3D-тренажер із безпечної поведінки у міському середовищі.">
   <title>Безпечне місто — навчальний тренажер</title>
   <link rel="stylesheet" href="css/style.css?v=20260918-3">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
   <main class="app" id="app">
@@ -244,6 +252,6 @@
   </main>
 
   <noscript>Для роботи тренажера потрібно ввімкнути JavaScript.</noscript>
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=20260918-4"></script>
 </body>
 </html>

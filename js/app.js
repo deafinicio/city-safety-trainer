@@ -1,4 +1,4 @@
-import { TrainingWorld } from "./game3d.js";
+import { TrainingWorld } from "./game3d.js?v=20260918-4";
 import {
   clearStoredRegistration,
   hasStoredRegistration,
@@ -420,7 +420,13 @@ function startTraining(stageId) {
   elements.actionButton.hidden = true;
   showScreen("scene");
   ensureWorld();
-  requestAnimationFrame(() => world.start(stageId));
+  requestAnimationFrame(() => {
+    world.start(stageId).catch((error) => {
+      console.error("Не вдалося запустити фізичний рушій", error);
+      elements.missionInstruction.textContent =
+        "Не вдалося завантажити фізичний рушій. Перевірте з’єднання та перезапустіть етап.";
+    });
+  });
 }
 
 function returnToMenu() {

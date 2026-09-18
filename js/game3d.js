@@ -1,4 +1,13 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
+import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.20.0/+esm";
 import { stage01 } from "./stages/stage01.js";
 import { stage02 } from "./stages/stage02.js";
 import { stage03 } from "./stages/stage03.js";
@@ -25,6 +34,11 @@ const STAGES = new Map([
   [stage11.id, stage11]
 ]);
 
+const PLAYER_RADIUS = 0.32;
+const PLAYER_HALF_HEIGHT = 0.52;
+const PLAYER_CENTER_HEIGHT = PLAYER_RADIUS + PLAYER_HALF_HEIGHT;
+const CAMERA_EYE_OFFSET = 1.7 - PLAYER_CENTER_HEIGHT;
+
 export class TrainingWorld {
   constructor({
     canvas,
@@ -49,6 +63,7 @@ export class TrainingWorld {
     this.onInstructionChange = onInstructionChange;
     this.onStageChange = onStageChange;
 
+    this.graphicsProfile = this.resolveGraphicsProfile();
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x8fa39f);
     this.scene.fog = new THREE.Fog(0xaebbb5, 38, 104);
@@ -58,10 +73,10 @@ export class TrainingWorld {
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: true,
+      antialias: this.graphicsProfile.name !== "performance",
       powerPreference: "high-performance"
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.graphicsProfile.maxPixelRatio));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.08;
@@ -73,8 +88,8 @@ export class TrainingWorld {
     sun.position.set(-22, 34, 18);
     sun.castShadow = true;
     sun.shadow.mapSize.set(
-      window.matchMedia("(pointer: coarse)").matches ? 1024 : 2048,
-      window.matchMedia("(pointer: coarse)").matches ? 1024 : 2048
+      this.graphicsProfile.shadowMapSize,
+      this.graphicsProfile.shadowMapSize
     );
     sun.shadow.camera.left = -34;
     sun.shadow.camera.right = 34;
@@ -91,6 +106,9 @@ export class TrainingWorld {
     this.scene.add(fillLight);
 
     this.addAtmosphere();
+    this.setupEnvironmentLighting();
+    this.setupPostProcessing();
+    this.setupAssetPipeline();
 
     this.stageRoot = new THREE.Group();
     this.scene.add(this.stageRoot);
@@ -117,6 +135,16 @@ export class TrainingWorld {
     this.elapsedMs = 0;
     this.startTime = 0;
     this.lastInputMagnitude = 0;
+    this.startRequestId = 0;
+    this.physicsInitialized = false;
+    this.physicsWorld = null;
+    this.characterController = null;
+    this.playerCollider = null;
+    this.verticalVelocity = 0;
+    this.physicsReady = RAPIER.init().then(() => {
+      this.physicsInitialized = true;
+      this.resetPhysicsWorld();
+    });
 
     this.bindControls();
     this.resize();
@@ -133,6 +161,154 @@ export class TrainingWorld {
       shortTitle,
       instruction
     }));
+  }
+
+  resolveGraphicsProfile() {
+    const requested = new URLSearchParams(window.location.search).get("quality");
+    const profiles = {
+      performance: {
+        name: "performance",
+        maxPixelRatio: 1.25,
+        shadowMapSize: 1024,
+        ambientOcclusion: false,
+        bloom: false
+      },
+      balanced: {
+        name: "balanced",
+        maxPixelRatio: 1.6,
+        shadowMapSize: 1024,
+        ambientOcclusion: false,
+        bloom: true
+      },
+      high: {
+        name: "high",
+        maxPixelRatio: 2,
+        shadowMapSize: 2048,
+        ambientOcclusion: true,
+        bloom: true
+      }
+    };
+
+    if (requested && profiles[requested]) return profiles[requested];
+
+    const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const memory = navigator.deviceMemory || 4;
+    const cores = navigator.hardwareConcurrency || 4;
+
+    if (coarsePointer || reducedMotion || memory <= 4) return profiles.performance;
+    if (memory >= 8 && cores >= 8) return profiles.high;
+    return profiles.balanced;
+  }
+
+  setupEnvironmentLighting() {
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    pmrem.compileCubemapShader();
+    this.environmentTarget = pmrem.fromScene(this.scene, 0.04);
+    this.scene.environment = this.environmentTarget.texture;
+    this.scene.environmentIntensity = 0.72;
+    pmrem.dispose();
+  }
+
+  setupPostProcessing() {
+    if (!this.graphicsProfile.ambientOcclusion && !this.graphicsProfile.bloom) {
+      this.composer = null;
+      return;
+    }
+
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+
+    if (this.graphicsProfile.ambientOcclusion) {
+      this.gtaoPass = new GTAOPass(this.scene, this.camera, 1, 1);
+      this.gtaoPass.blendIntensity = 0.72;
+      this.gtaoPass.updateGtaoMaterial({
+        radius: 0.28,
+        distanceExponent: 1.7,
+        thickness: 1.4,
+        distanceFallOff: 0.82,
+        scale: 1
+      });
+      this.gtaoPass.updatePdMaterial({
+        lumaPhi: 10,
+        depthPhi: 2,
+        normalPhi: 3,
+        radius: 4,
+        radiusExponent: 1,
+        rings: 2,
+        samples: 12
+      });
+      this.composer.addPass(this.gtaoPass);
+    }
+
+    if (this.graphicsProfile.bloom) {
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.1, 0.22, 0.94);
+      this.composer.addPass(this.bloomPass);
+    }
+
+    this.composer.addPass(new OutputPass());
+  }
+
+  setupAssetPipeline() {
+    this.dracoLoader = new DRACOLoader();
+    this.dracoLoader.setDecoderPath(
+      "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/libs/draco/"
+    );
+
+    this.ktx2Loader = new KTX2Loader();
+    this.ktx2Loader.setTranscoderPath(
+      "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/libs/basis/"
+    );
+    this.ktx2Loader.detectSupport(this.renderer);
+
+    this.gltfLoader = new GLTFLoader();
+    this.gltfLoader.setDRACOLoader(this.dracoLoader);
+    this.gltfLoader.setKTX2Loader(this.ktx2Loader);
+  }
+
+  async loadModel(url, {
+    position = [0, 0, 0],
+    rotation = [0, 0, 0],
+    scale = 1,
+    collidable = false
+  } = {}) {
+    const gltf = await this.gltfLoader.loadAsync(url);
+    const model = gltf.scene;
+    model.position.set(...position);
+    model.rotation.set(...rotation);
+    model.scale.setScalar(scale);
+    model.updateMatrixWorld(true);
+    this.add(model);
+
+    if (collidable) {
+      const bounds = new THREE.Box3().setFromObject(model);
+      const size = bounds.getSize(new THREE.Vector3());
+      const center = bounds.getCenter(new THREE.Vector3());
+      this.addCollisionBox(center.x, center.z, size.x, size.z, rotation[1], 0, size.y);
+    }
+
+    return { model, animations: gltf.animations };
+  }
+
+  resetPhysicsWorld() {
+    this.physicsWorld?.free();
+    this.physicsWorld = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+    this.characterController = this.physicsWorld.createCharacterController(0.025);
+    this.characterController.enableAutostep(0.32, 0.18, false);
+    this.characterController.enableSnapToGround(0.3);
+    this.characterController.setMaxSlopeClimbAngle(48 * Math.PI / 180);
+    this.characterController.setMinSlopeSlideAngle(38 * Math.PI / 180);
+
+    const ground = RAPIER.ColliderDesc.cuboid(60, 0.05, 60)
+      .setTranslation(0, -0.05, 0)
+      .setFriction(0.9);
+    this.physicsWorld.createCollider(ground);
+
+    const player = RAPIER.ColliderDesc.capsule(PLAYER_HALF_HEIGHT, PLAYER_RADIUS)
+      .setTranslation(0, PLAYER_CENTER_HEIGHT, 0)
+      .setFriction(0);
+    this.playerCollider = this.physicsWorld.createCollider(player);
+    this.verticalVelocity = 0;
   }
 
   clearStage() {
@@ -167,6 +343,7 @@ export class TrainingWorld {
     this.stageRoot = new THREE.Group();
     this.scene.add(this.stageRoot);
     this.colliders = [];
+    if (this.physicsInitialized) this.resetPhysicsWorld();
   }
 
   loadStage(stageId) {
@@ -178,6 +355,7 @@ export class TrainingWorld {
     this.currentStage = stage;
     this.currentStageId = stageId;
     stage.build(this);
+    this.physicsWorld?.step();
     this.onStageChange?.({
       id: stage.id,
       number: stage.number,
@@ -187,7 +365,11 @@ export class TrainingWorld {
     });
   }
 
-  start(stageId) {
+  async start(stageId) {
+    const requestId = ++this.startRequestId;
+    await this.physicsReady;
+    if (requestId !== this.startRequestId) return;
+
     if (this.currentStageId !== stageId) {
       this.loadStage(stageId);
     }
@@ -215,6 +397,7 @@ export class TrainingWorld {
 
   stop() {
     this.active = false;
+    this.startRequestId += 1;
     this.keys.clear();
     this.lastInputMagnitude = 0;
 
@@ -749,10 +932,24 @@ export class TrainingWorld {
 
   setBounds(bounds) {
     this.bounds = bounds;
+    if (!this.physicsInitialized) return;
+
+    const thickness = 0.5;
+    const width = bounds.maxX - bounds.minX;
+    const depth = bounds.maxZ - bounds.minZ;
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+
+    this.addCollisionBox(bounds.minX - thickness / 2, centerZ, thickness, depth + 1);
+    this.addCollisionBox(bounds.maxX + thickness / 2, centerZ, thickness, depth + 1);
+    this.addCollisionBox(centerX, bounds.minZ - thickness / 2, width + 1, thickness);
+    this.addCollisionBox(centerX, bounds.maxZ + thickness / 2, width + 1, thickness);
   }
 
   setPlayerPosition(x, z) {
     this.camera.position.set(x, 1.7, z);
+    this.verticalVelocity = 0;
+    this.playerCollider?.setTranslation({ x, y: PLAYER_CENTER_HEIGHT, z }, true);
   }
 
   addGround(color) {
@@ -787,7 +984,7 @@ export class TrainingWorld {
     return this.add(road);
   }
 
-  addCollisionBox(x, z, width, depth, rotation = 0, padding = 0) {
+  addCollisionBox(x, z, width, depth, rotation = 0, padding = 0, height = 2.4) {
     const cos = Math.abs(Math.cos(rotation));
     const sin = Math.abs(Math.sin(rotation));
     const halfX = (width * cos + depth * sin) / 2 + padding;
@@ -796,14 +993,62 @@ export class TrainingWorld {
       minX: x - halfX,
       maxX: x + halfX,
       minZ: z - halfZ,
-      maxZ: z + halfZ
+      maxZ: z + halfZ,
+      physicsCollider: null
     };
+
+    if (this.physicsWorld) {
+      const halfAngle = rotation / 2;
+      const descriptor = RAPIER.ColliderDesc.cuboid(
+        width / 2 + padding,
+        Math.max(0.05, height / 2),
+        depth / 2 + padding
+      )
+        .setTranslation(x, Math.max(0.05, height / 2), z)
+        .setRotation({ x: 0, y: Math.sin(halfAngle), z: 0, w: Math.cos(halfAngle) })
+        .setFriction(0.8);
+      collider.physicsCollider = this.physicsWorld.createCollider(descriptor);
+    }
+
     this.colliders.push(collider);
     return collider;
   }
 
   addCollisionCircle(x, z, radius) {
-    return this.addCollisionBox(x, z, radius * 2, radius * 2);
+    const collider = {
+      minX: x - radius,
+      maxX: x + radius,
+      minZ: z - radius,
+      maxZ: z + radius,
+      physicsCollider: null
+    };
+
+    if (this.physicsWorld) {
+      const descriptor = RAPIER.ColliderDesc.cylinder(1.2, radius)
+        .setTranslation(x, 1.2, z)
+        .setFriction(0.8);
+      collider.physicsCollider = this.physicsWorld.createCollider(descriptor);
+    }
+
+    this.colliders.push(collider);
+    return collider;
+  }
+
+  addLocalCollisionBox(
+    originX,
+    originZ,
+    localX,
+    localZ,
+    width,
+    depth,
+    rotation = 0,
+    height = 2.4
+  ) {
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const worldX = originX + localX * cos + localZ * sin;
+    const worldZ = originZ - localX * sin + localZ * cos;
+    return this.addCollisionBox(worldX, worldZ, width, depth, rotation, 0, height);
   }
 
   addBuilding(x, y, z, width, height, depth, color, { collidable = true } = {}) {
@@ -1661,10 +1906,10 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
-    this.addCollisionBox(x, z - 0.72, 4.8, 0.18, rotation);
-    this.addCollisionBox(x - 2.38, z - 0.02, 0.18, 1.4, rotation);
-    this.addCollisionBox(x + 2.38, z - 0.02, 0.18, 1.4, rotation);
-    this.addCollisionBox(x, z - 0.38, 3.2, 0.58, rotation);
+    this.addLocalCollisionBox(x, z, 0, -0.72, 4.8, 0.18, rotation);
+    this.addLocalCollisionBox(x, z, -2.38, -0.02, 0.18, 1.4, rotation);
+    this.addLocalCollisionBox(x, z, 2.38, -0.02, 0.18, 1.4, rotation);
+    this.addLocalCollisionBox(x, z, 0, -0.38, 3.2, 0.58, rotation);
     return this.add(group);
   }
 
@@ -1714,9 +1959,9 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
-    this.addCollisionBox(x - 1.55, z, 0.32, 4.4, rotation);
-    this.addCollisionBox(x + 1.55, z, 0.32, 4.4, rotation);
-    this.addCollisionBox(x, z - 2.05, 3.4, 0.32, rotation);
+    this.addLocalCollisionBox(x, z, -1.55, 0, 0.32, 4.4, rotation);
+    this.addLocalCollisionBox(x, z, 1.55, 0, 0.32, 4.4, rotation);
+    this.addLocalCollisionBox(x, z, 0, -2.05, 3.4, 0.32, rotation);
     return this.add(group);
   }
 
@@ -1913,12 +2158,7 @@ export class TrainingWorld {
     );
     wall.position.set(x, height / 2, z);
     this.add(wall);
-    this.colliders.push({
-      minX: x - width / 2,
-      maxX: x + width / 2,
-      minZ: z - depth / 2,
-      maxZ: z + depth / 2
-    });
+    this.addCollisionBox(x, z, width, depth, 0, 0, height);
     return wall;
   }
 
@@ -1965,7 +2205,7 @@ export class TrainingWorld {
 
     group.position.set(0, 0, z);
     group.userData.glassMaterial = glassMaterial;
-    this.colliders.push({ minX: -width / 2, maxX: width / 2, minZ: z - 0.15, maxZ: z + 0.15 });
+    this.addCollisionBox(0, z, width, 0.3, 0, 0, 3.9);
     return this.add(group);
   }
 
@@ -2418,6 +2658,7 @@ export class TrainingWorld {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
+    this.composer?.setSize(width, height);
   }
 
   isBlocked(x, z) {
@@ -2477,11 +2718,34 @@ export class TrainingWorld {
     const dx = (forwardX * forwardInput + rightX * rightInput) * speed * delta;
     const dz = (forwardZ * forwardInput + rightZ * rightInput) * speed * delta;
 
-    const nextX = this.camera.position.x + dx;
-    const nextZ = this.camera.position.z + dz;
+    if (this.characterController && this.playerCollider) {
+      const current = this.playerCollider.translation();
+      this.verticalVelocity = Math.max(-12, this.verticalVelocity - 9.81 * delta);
+      this.characterController.computeColliderMovement(this.playerCollider, {
+        x: dx,
+        y: this.verticalVelocity * delta,
+        z: dz
+      });
 
-    if (!this.isBlocked(nextX, this.camera.position.z)) this.camera.position.x = nextX;
-    if (!this.isBlocked(this.camera.position.x, nextZ)) this.camera.position.z = nextZ;
+      const movement = this.characterController.computedMovement();
+      const next = {
+        x: current.x + movement.x,
+        y: current.y + movement.y,
+        z: current.z + movement.z
+      };
+      this.playerCollider.setTranslation(next, true);
+      this.camera.position.set(next.x, next.y + CAMERA_EYE_OFFSET, next.z);
+
+      if (this.characterController.computedGrounded() && this.verticalVelocity < 0) {
+        this.verticalVelocity = -0.2;
+      }
+    } else {
+      const nextX = this.camera.position.x + dx;
+      const nextZ = this.camera.position.z + dz;
+
+      if (!this.isBlocked(nextX, this.camera.position.z)) this.camera.position.x = nextX;
+      if (!this.isBlocked(this.camera.position.x, nextZ)) this.camera.position.z = nextZ;
+    }
 
     this.camera.rotation.y = this.yaw;
     this.camera.rotation.x = this.pitch;
@@ -2491,6 +2755,10 @@ export class TrainingWorld {
     if (!this.active || !this.currentStage) return;
 
     this.elapsedMs = performance.now() - this.startTime;
+    if (this.physicsWorld) {
+      this.physicsWorld.timestep = delta;
+      this.physicsWorld.step();
+    }
     this.updateMovement(delta);
     this.currentStage.update(this, delta);
   }
@@ -2498,7 +2766,11 @@ export class TrainingWorld {
   animate() {
     const delta = Math.min(this.clock.getDelta(), 0.05);
     this.update(delta);
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer) {
+      this.composer.render(delta);
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
     requestAnimationFrame(this.animate);
   }
 }
