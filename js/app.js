@@ -9,11 +9,18 @@ const screens = {
 const elements = {
   startButton: document.querySelector("#start-button"),
   restartButton: document.querySelector("#restart-button"),
+  retryButton: document.querySelector("#retry-button"),
   exitButton: document.querySelector("#exit-button"),
   canvas: document.querySelector("#game-canvas"),
   joystick: document.querySelector("#joystick"),
   joystickKnob: document.querySelector("#joystick-knob"),
-  lookZone: document.querySelector("#look-zone")
+  lookZone: document.querySelector("#look-zone"),
+  failurePanel: document.querySelector("#failure-panel"),
+  failureReason: document.querySelector("#failure-reason"),
+  resultMessage: document.querySelector("#result-message"),
+  metricTime: document.querySelector("#metric-time"),
+  metricDistance: document.querySelector("#metric-distance"),
+  metricCorrection: document.querySelector("#metric-correction")
 };
 
 let world;
@@ -25,6 +32,27 @@ function showScreen(name) {
   screens[name].classList.add("screen--active");
 }
 
+function renderResult(metrics) {
+  elements.resultMessage.textContent =
+    "Ви не стали скорочувати шлях через небезпечну ділянку й успішно дісталися контрольної точки.";
+
+  elements.metricTime.textContent =
+    metrics.decisionSeconds === null ? "не зафіксовано" : metrics.decisionSeconds + " с";
+
+  elements.metricDistance.textContent =
+    metrics.minRocketDistance === null ? "не зафіксовано" : metrics.minRocketDistance + " м";
+
+  elements.metricCorrection.textContent =
+    metrics.correctedRoute ? "маршрут виправлено" : "не знадобилося";
+
+  showScreen("result");
+}
+
+function showFailure({ reason }) {
+  elements.failureReason.textContent = reason;
+  elements.failurePanel.hidden = false;
+}
+
 function ensureWorld() {
   if (world) return;
 
@@ -33,13 +61,13 @@ function ensureWorld() {
     joystick: elements.joystick,
     joystickKnob: elements.joystickKnob,
     lookZone: elements.lookZone,
-    onComplete: () => {
-      window.setTimeout(() => showScreen("result"), 350);
-    }
+    onSuccess: ({ metrics }) => renderResult(metrics),
+    onFailure: showFailure
   });
 }
 
 function startTraining() {
+  elements.failurePanel.hidden = true;
   showScreen("scene");
   ensureWorld();
   requestAnimationFrame(() => world.start());
@@ -47,9 +75,11 @@ function startTraining() {
 
 function exitTraining() {
   world?.stop();
+  elements.failurePanel.hidden = true;
   showScreen("start");
 }
 
 elements.startButton.addEventListener("click", startTraining);
 elements.restartButton.addEventListener("click", startTraining);
+elements.retryButton.addEventListener("click", startTraining);
 elements.exitButton.addEventListener("click", exitTraining);
