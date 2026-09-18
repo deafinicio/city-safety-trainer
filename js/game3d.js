@@ -6,6 +6,7 @@ import { stage04 } from "./stages/stage04.js";
 import { stage05 } from "./stages/stage05.js";
 import { stage06 } from "./stages/stage06.js";
 import { stage07 } from "./stages/stage07.js";
+import { stage08 } from "./stages/stage08.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
@@ -14,7 +15,8 @@ const STAGES = new Map([
   [stage04.id, stage04],
   [stage05.id, stage05],
   [stage06.id, stage06],
-  [stage07.id, stage07]
+  [stage07.id, stage07],
+  [stage08.id, stage08]
 ]);
 
 export class TrainingWorld {
@@ -362,6 +364,56 @@ export class TrainingWorld {
     gain.connect(this.audioContext.destination);
     oscillator.start(startAt);
     oscillator.stop(startAt + 0.85);
+  }
+
+  playAirRaidSiren() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!this.audioContext) this.audioContext = new AudioContextClass();
+    if (this.audioContext.state === "suspended") this.audioContext.resume();
+
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    const startAt = this.audioContext.currentTime;
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(430, startAt);
+    oscillator.frequency.linearRampToValueAtTime(610, startAt + 0.7);
+    oscillator.frequency.linearRampToValueAtTime(430, startAt + 1.4);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.linearRampToValueAtTime(0.12, startAt + 0.12);
+    gain.gain.setValueAtTime(0.12, startAt + 1.22);
+    gain.gain.linearRampToValueAtTime(0.0001, startAt + 1.48);
+
+    oscillator.connect(gain);
+    gain.connect(this.audioContext.destination);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + 1.5);
+  }
+
+  playApproachRumble() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!this.audioContext) this.audioContext = new AudioContextClass();
+    if (this.audioContext.state === "suspended") this.audioContext.resume();
+
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    const startAt = this.audioContext.currentTime;
+
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(62, startAt);
+    oscillator.frequency.exponentialRampToValueAtTime(112, startAt + 1.7);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.1, startAt + 0.3);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 1.9);
+
+    oscillator.connect(gain);
+    gain.connect(this.audioContext.destination);
+    oscillator.start(startAt);
+    oscillator.stop(startAt + 2);
   }
 
   add(object) {
@@ -879,6 +931,114 @@ export class TrainingWorld {
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addParkedCar(x, z, rotation = 0, color = 0x4b6170) {
+    const group = new THREE.Group();
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.2 });
+    const glassMaterial = new THREE.MeshStandardMaterial({ color: 0x26383e, roughness: 0.28 });
+    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x171a19, roughness: 0.9 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.52, 3.5), bodyMaterial);
+    body.position.y = 0.62;
+    group.add(body);
+
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.7, 1.75), glassMaterial);
+    cabin.position.set(0, 1.18, -0.15);
+    group.add(cabin);
+
+    for (const wheelX of [-0.92, 0.92]) {
+      for (const wheelZ of [-1.15, 1.15]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.18, 14), tireMaterial);
+        wheel.position.set(wheelX, 0.34, wheelZ);
+        wheel.rotation.z = Math.PI / 2;
+        group.add(wheel);
+      }
+    }
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addPlayground(x, z) {
+    const group = new THREE.Group();
+    const metal = new THREE.MeshStandardMaterial({ color: 0xe1ad2f, roughness: 0.7 });
+    const accent = new THREE.MeshStandardMaterial({ color: 0xc84b42, roughness: 0.72 });
+    const sand = new THREE.MeshStandardMaterial({ color: 0xb99b68, roughness: 1 });
+
+    const sandbox = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 4.2), sand);
+    sandbox.position.y = 0.04;
+    group.add(sandbox);
+
+    for (const side of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 2.4, 8), metal);
+      leg.position.set(side * 1.2, 1.2, 0.35);
+      leg.rotation.z = side * 0.18;
+      group.add(leg);
+    }
+
+    const swingTop = new THREE.Mesh(new THREE.BoxGeometry(2.65, 0.13, 0.13), metal);
+    swingTop.position.set(0, 2.32, 0.35);
+    group.add(swingTop);
+
+    for (const chainX of [-0.35, 0.35]) {
+      const chain = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.018, 0.018, 1.35, 6),
+        new THREE.MeshStandardMaterial({ color: 0x5d625f, metalness: 0.5 })
+      );
+      chain.position.set(chainX, 1.61, 0.35);
+      group.add(chain);
+    }
+
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.09, 0.36), accent);
+    seat.position.set(0, 0.94, 0.35);
+    group.add(seat);
+
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.12, 2.7), accent);
+    slide.position.set(1.45, 0.82, -0.75);
+    slide.rotation.x = -0.52;
+    group.add(slide);
+
+    group.position.set(x, 0, z);
+    return this.add(group);
+  }
+
+  addApartmentEntrance(x, z) {
+    const group = new THREE.Group();
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xb7b3a8, roughness: 0.9 });
+    const doorMaterial = new THREE.MeshBasicMaterial({ color: 0x111817 });
+    const lightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xb7e0a5,
+      emissive: 0x315c2a,
+      emissiveIntensity: 1.5
+    });
+
+    const doorway = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 3.1), doorMaterial);
+    doorway.position.y = 1.55;
+    group.add(doorway);
+
+    for (const side of [-1, 1]) {
+      const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.25, 0.28), frameMaterial);
+      jamb.position.set(side * 1.18, 1.62, 0.03);
+      group.add(jamb);
+    }
+
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.2, 0.3), frameMaterial);
+    lintel.position.set(0, 3.18, 0.03);
+    group.add(lintel);
+
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.16, 1.15), frameMaterial);
+    awning.position.set(0, 3.52, 0.42);
+    awning.rotation.x = -0.08;
+    group.add(awning);
+
+    const light = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.16, 0.12), lightMaterial);
+    light.position.set(0, 3.05, 0.19);
+    group.add(light);
+
+    group.position.set(x, 0, z);
     return this.add(group);
   }
 
