@@ -12,12 +12,17 @@ const elements = {
   stage03Button: document.querySelector("#stage-03-button"),
   stage04Button: document.querySelector("#stage-04-button"),
   stage05Button: document.querySelector("#stage-05-button"),
+  stage06Button: document.querySelector("#stage-06-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
   menuButton: document.querySelector("#menu-button"),
   exitButton: document.querySelector("#exit-button"),
   actionButton: document.querySelector("#action-button"),
+  dialoguePanel: document.querySelector("#dialogue-panel"),
+  dialogueTitle: document.querySelector("#dialogue-title"),
+  dialoguePrompt: document.querySelector("#dialogue-prompt"),
+  dialogueOptions: document.querySelector("#dialogue-options"),
   canvas: document.querySelector("#game-canvas"),
   joystick: document.querySelector("#joystick"),
   joystickKnob: document.querySelector("#joystick-knob"),
@@ -112,6 +117,22 @@ const resultContent = {
         ["Послідовність дій", metrics.correctSequence ? "правильна" : "порушена"]
       ];
     }
+  },
+  "stage-06": {
+    title: "Підозрілий предмет залишено безпечно",
+    message:
+      "Ви не торкалися рюкзака, відійшли на умовно змодельовану безпечну дистанцію та правильно передали повідомлення 101.",
+    guidance:
+      "Не наближайтеся, не торкайтеся й не відкривайте підозрілий предмет. Відійдіть у протилежному напрямку, повідомте точне місце та опис небезпеки й не повертайтеся.",
+    metrics(metrics) {
+      return [
+        ["Час до зупинки", formatSeconds(metrics.reactionSeconds)],
+        ["Досягнення дистанції", metrics.safeDistanceReached ? "≥300 м, умовно" : "не досягнуто"],
+        ["Час до дистанції", formatSeconds(metrics.safeDistanceSeconds)],
+        ["Послідовність дзвінка", metrics.callSequenceCorrect ? "правильна" : "порушена"],
+        ["Тривалість повідомлення", formatSeconds(metrics.callSeconds)]
+      ];
+    }
   }
 };
 
@@ -153,7 +174,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-05";
+  elements.nextButton.hidden = stage.id === "stage-06";
   showScreen("result");
 }
 
@@ -167,6 +188,24 @@ function showFailure({ stage, reason }) {
 function updateAction({ visible, label }) {
   elements.actionButton.hidden = !visible;
   elements.actionButton.textContent = visible ? label + "  [E]" : "";
+}
+
+function updateDialogue({ visible, title, prompt, options }) {
+  elements.dialoguePanel.hidden = !visible;
+  elements.dialogueTitle.textContent = title;
+  elements.dialoguePrompt.textContent = prompt;
+  elements.dialogueOptions.replaceChildren();
+
+  if (!visible) return;
+
+  for (const option of options) {
+    const button = document.createElement("button");
+    button.className = "dialogue-option";
+    button.type = "button";
+    button.textContent = option.label;
+    button.addEventListener("click", () => world?.chooseDialogue(option.value));
+    elements.dialogueOptions.append(button);
+  }
 }
 
 function updateStageHeader(stage) {
@@ -185,6 +224,7 @@ function ensureWorld() {
     onSuccess: renderResult,
     onFailure: showFailure,
     onActionChange: updateAction,
+    onDialogueChange: updateDialogue,
     onStageChange: updateStageHeader
   });
 }
@@ -192,6 +232,7 @@ function ensureWorld() {
 function startTraining(stageId) {
   currentStageId = stageId;
   elements.failurePanel.hidden = true;
+  elements.dialoguePanel.hidden = true;
   elements.actionButton.hidden = true;
   showScreen("scene");
   ensureWorld();
@@ -202,6 +243,7 @@ function returnToMenu() {
   world?.stop();
   world?.clearAction();
   elements.failurePanel.hidden = true;
+  elements.dialoguePanel.hidden = true;
   showScreen("start");
 }
 
@@ -210,6 +252,7 @@ elements.stage02Button.addEventListener("click", () => startTraining("stage-02")
 elements.stage03Button.addEventListener("click", () => startTraining("stage-03"));
 elements.stage04Button.addEventListener("click", () => startTraining("stage-04"));
 elements.stage05Button.addEventListener("click", () => startTraining("stage-05"));
+elements.stage06Button.addEventListener("click", () => startTraining("stage-06"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
 elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
 elements.nextButton.addEventListener("click", () => {
@@ -217,7 +260,8 @@ elements.nextButton.addEventListener("click", () => {
     "stage-01": "stage-02",
     "stage-02": "stage-03",
     "stage-03": "stage-04",
-    "stage-04": "stage-05"
+    "stage-04": "stage-05",
+    "stage-05": "stage-06"
   }[currentStageId];
 
   if (nextStage) startTraining(nextStage);
