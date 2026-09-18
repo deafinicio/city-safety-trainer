@@ -121,7 +121,7 @@ const resultContent = {
   "stage-06": {
     title: "Підозрілий предмет залишено безпечно",
     message:
-      "Ви не торкалися рюкзака, відійшли на умовно змодельовану безпечну дистанцію та правильно передали повідомлення 101.",
+      "Ви не торкалися рюкзака, відійшли на умовно змодельовану безпечну дистанцію та правильно передали повідомлення екстреній службі.",
     guidance:
       "Не наближайтеся, не торкайтеся й не відкривайте підозрілий предмет. Відійдіть у протилежному напрямку, повідомте точне місце та опис небезпеки й не повертайтеся.",
     metrics(metrics) {
@@ -129,6 +129,7 @@ const resultContent = {
         ["Час до зупинки", formatSeconds(metrics.reactionSeconds)],
         ["Досягнення дистанції", metrics.safeDistanceReached ? "≥300 м, умовно" : "не досягнуто"],
         ["Час до дистанції", formatSeconds(metrics.safeDistanceSeconds)],
+        ["Набраний номер", metrics.calledNumber || "не набрано"],
         ["Послідовність дзвінка", metrics.callSequenceCorrect ? "правильна" : "порушена"],
         ["Тривалість повідомлення", formatSeconds(metrics.callSeconds)]
       ];
@@ -190,8 +191,10 @@ function updateAction({ visible, label }) {
   elements.actionButton.textContent = visible ? label + "  [E]" : "";
 }
 
-function updateDialogue({ visible, title, prompt, options }) {
+function updateDialogue({ visible, variant = "questions", title, prompt, options }) {
   elements.dialoguePanel.hidden = !visible;
+  elements.dialoguePanel.classList.toggle("dialogue-panel--dialer", variant === "dialer");
+  elements.dialogueOptions.classList.toggle("dialogue-options--dialer", variant === "dialer");
   elements.dialogueTitle.textContent = title;
   elements.dialoguePrompt.textContent = prompt;
   elements.dialogueOptions.replaceChildren();
@@ -201,8 +204,10 @@ function updateDialogue({ visible, title, prompt, options }) {
   for (const option of options) {
     const button = document.createElement("button");
     button.className = "dialogue-option";
+    if (option.kind) button.classList.add(`dialogue-option--${option.kind}`);
     button.type = "button";
     button.textContent = option.label;
+    if (option.ariaLabel) button.setAttribute("aria-label", option.ariaLabel);
     button.addEventListener("click", () => world?.chooseDialogue(option.value));
     elements.dialogueOptions.append(button);
   }
