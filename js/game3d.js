@@ -400,52 +400,119 @@ export class TrainingWorld {
 
   addMineWarningSign(x, z, rotation = 0) {
     const group = new THREE.Group();
-    const postMaterial = new THREE.MeshStandardMaterial({ color: 0x4b4034, roughness: 1 });
-    const boardMaterial = new THREE.MeshStandardMaterial({ color: 0xd9d7ce, roughness: 0.9 });
+    const postMaterial = new THREE.MeshStandardMaterial({
+      color: 0x4b4034,
+      roughness: 1
+    });
+    const boardMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe8e4d8,
+      roughness: 0.9
+    });
 
-    for (const postX of [-0.72, 0.72]) {
-      const post = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.055, 0.07, 2.4, 8),
-        postMaterial
-      );
-      post.position.set(postX, 1.2, 0);
-      group.add(post);
-    }
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.075, 0.09, 2.7, 10),
+      postMaterial
+    );
+    post.position.set(0, 1.35, 0);
+    group.add(post);
 
     const board = new THREE.Mesh(
-      new THREE.BoxGeometry(1.9, 1.25, 0.1),
+      new THREE.BoxGeometry(2.25, 1.55, 0.11),
       boardMaterial
     );
-    board.position.set(0, 1.75, 0);
+    board.position.set(0, 1.95, 0);
     group.add(board);
 
     const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 340;
+    canvas.width = 768;
+    canvas.height = 512;
     const context = canvas.getContext("2d");
 
-    context.fillStyle = "#f2eee2";
+    context.fillStyle = "#f4f0e5";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = "#c92127";
-    context.lineWidth = 30;
-    context.strokeRect(15, 15, canvas.width - 30, canvas.height - 30);
-    context.fillStyle = "#171717";
-    context.textAlign = "center";
-    context.font = "900 76px sans-serif";
-    context.fillText("НЕБЕЗПЕЧНО", 256, 105);
-    context.font = "900 112px sans-serif";
-    context.fillText("МІНИ", 256, 235);
-    context.font = "700 48px sans-serif";
-    context.fillText("☠", 256, 305);
+    context.strokeStyle = "#d02027";
+    context.lineWidth = 34;
+    context.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+
+    const drawFittedText = (text, y, maxWidth, initialSize) => {
+      let fontSize = initialSize;
+      do {
+        context.font = "900 " + fontSize + "px Arial, sans-serif";
+        fontSize -= 2;
+      } while (context.measureText(text).width > maxWidth && fontSize > 30);
+
+      context.fillStyle = "#111";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(text, canvas.width / 2, y);
+    };
+
+    drawFittedText("НЕБЕЗПЕЧНО!", 82, 660, 72);
+
+    context.save();
+    context.strokeStyle = "#111";
+    context.lineWidth = 28;
+    context.lineCap = "round";
+    context.beginPath();
+    context.moveTo(270, 190);
+    context.lineTo(498, 354);
+    context.moveTo(498, 190);
+    context.lineTo(270, 354);
+    context.stroke();
+
+    for (const [boneX, boneY] of [
+      [270, 190], [498, 354], [498, 190], [270, 354]
+    ]) {
+      context.fillStyle = "#111";
+      context.beginPath();
+      context.arc(boneX, boneY, 18, 0, Math.PI * 2);
+      context.fill();
+    }
+
+    context.fillStyle = "#111";
+    context.beginPath();
+    context.ellipse(384, 250, 92, 100, 0, 0, Math.PI * 2);
+    context.fill();
+    context.fillRect(320, 290, 128, 70);
+
+    context.fillStyle = "#f4f0e5";
+    context.beginPath();
+    context.ellipse(350, 245, 24, 31, -0.15, 0, Math.PI * 2);
+    context.ellipse(418, 245, 24, 31, 0.15, 0, Math.PI * 2);
+    context.fill();
+
+    context.beginPath();
+    context.moveTo(384, 270);
+    context.lineTo(365, 300);
+    context.lineTo(403, 300);
+    context.closePath();
+    context.fill();
+
+    context.strokeStyle = "#f4f0e5";
+    context.lineWidth = 8;
+    for (let toothX = 338; toothX <= 430; toothX += 23) {
+      context.beginPath();
+      context.moveTo(toothX, 315);
+      context.lineTo(toothX, 353);
+      context.stroke();
+    }
+    context.beginPath();
+    context.moveTo(322, 332);
+    context.lineTo(446, 332);
+    context.stroke();
+    context.restore();
+
+    drawFittedText("МІНИ!", 432, 650, 98);
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
 
     const face = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.78, 1.13),
+      new THREE.PlaneGeometry(2.12, 1.43),
       new THREE.MeshBasicMaterial({ map: texture })
     );
-    face.position.set(0, 1.75, 0.056);
+    face.position.set(0, 1.95, 0.058);
     group.add(face);
 
     group.position.set(x, 0, z);
@@ -455,30 +522,43 @@ export class TrainingWorld {
 
   addWarningFence(x, z, length, rotation = 0) {
     const group = new THREE.Group();
-    const postMaterial = new THREE.MeshStandardMaterial({ color: 0x655646, roughness: 1 });
-    const tapeMaterial = new THREE.MeshStandardMaterial({
-      color: 0xc52a2f,
-      emissive: 0x260202,
-      roughness: 0.72
+    const postMaterial = new THREE.MeshStandardMaterial({
+      color: 0x655646,
+      roughness: 1
+    });
+    const redMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd3222a,
+      emissive: 0x2a0203,
+      roughness: 0.7
+    });
+    const whiteMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf0eee6,
+      roughness: 0.75
     });
 
-    const postCount = Math.max(3, Math.ceil(length / 2.2));
+    const postCount = Math.max(3, Math.ceil(length / 2.1) + 1);
     for (let index = 0; index < postCount; index += 1) {
       const localX = -length / 2 + (length * index) / (postCount - 1);
-      const post = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.055, 1.35, 7),
+      const fencePost = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.06, 1.35, 8),
         postMaterial
       );
-      post.position.set(localX, 0.675, 0);
-      group.add(post);
+      fencePost.position.set(localX, 0.675, 0);
+      group.add(fencePost);
     }
 
-    for (const height of [0.62, 1.05]) {
+    const segmentCount = Math.max(2, Math.ceil(length / 0.55));
+    const segmentLength = length / segmentCount;
+    for (let index = 0; index < segmentCount; index += 1) {
       const tape = new THREE.Mesh(
-        new THREE.BoxGeometry(length, 0.075, 0.045),
-        tapeMaterial
+        new THREE.BoxGeometry(segmentLength + 0.012, 0.13, 0.045),
+        index % 2 === 0 ? redMaterial : whiteMaterial
       );
-      tape.position.y = height;
+      tape.position.set(
+        -length / 2 + segmentLength / 2 + index * segmentLength,
+        0.96,
+        0
+      );
       group.add(tape);
     }
 
