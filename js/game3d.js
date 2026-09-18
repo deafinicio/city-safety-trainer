@@ -1,18 +1,26 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
 
 export class TrainingWorld {
-  constructor({ canvas, joystick, joystickKnob, lookZone, onComplete }) {
+  constructor({
+    canvas,
+    joystick,
+    joystickKnob,
+    lookZone,
+    onSuccess,
+    onFailure
+  }) {
     this.canvas = canvas;
     this.joystick = joystick;
     this.joystickKnob = joystickKnob;
     this.lookZone = lookZone;
-    this.onComplete = onComplete;
+    this.onSuccess = onSuccess;
+    this.onFailure = onFailure;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x9ca99f);
-    this.scene.fog = new THREE.Fog(0x9ca99f, 28, 70);
+    this.scene.background = new THREE.Color(0xa4aaa4);
+    this.scene.fog = new THREE.Fog(0xa4aaa4, 34, 82);
 
-    this.camera = new THREE.PerspectiveCamera(68, 1, 0.1, 120);
+    this.camera = new THREE.PerspectiveCamera(68, 1, 0.1, 130);
     this.camera.rotation.order = "YXZ";
 
     this.renderer = new THREE.WebGLRenderer({
@@ -31,6 +39,7 @@ export class TrainingWorld {
     this.active = false;
     this.completed = false;
     this.colliders = [];
+    this.rocketPosition = new THREE.Vector2(-3.7, -9.7);
 
     this.createEnvironment();
     this.bindControls();
@@ -42,106 +51,177 @@ export class TrainingWorld {
   }
 
   createEnvironment() {
-    const ambient = new THREE.HemisphereLight(0xdce7df, 0x465047, 2.4);
-    this.scene.add(ambient);
+    this.scene.add(new THREE.HemisphereLight(0xe7ece8, 0x424942, 2.5));
 
-    const sun = new THREE.DirectionalLight(0xfff1d0, 2.2);
-    sun.position.set(-12, 20, 8);
+    const sun = new THREE.DirectionalLight(0xffedcf, 2.1);
+    sun.position.set(-14, 22, 10);
     this.scene.add(sun);
 
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(90, 90),
-      new THREE.MeshStandardMaterial({ color: 0x536052, roughness: 1 })
+      new THREE.PlaneGeometry(100, 100),
+      new THREE.MeshStandardMaterial({ color: 0x596158, roughness: 1 })
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.02;
+    ground.position.y = -0.03;
     this.scene.add(ground);
 
-    const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(8, 52),
-      new THREE.MeshStandardMaterial({ color: 0x303634, roughness: 1 })
-    );
-    road.rotation.x = -Math.PI / 2;
-    road.position.set(0, 0, -11);
-    this.scene.add(road);
+    this.addRoad(0, 9, 12, 18, 0x363a38);
+    this.addRoad(-3.8, -8.5, 4.2, 21, 0x323634);
+    this.addRoad(4.2, -9.5, 5.1, 27, 0x474b47);
+    this.addRoad(0, -23.2, 12, 8, 0x393d3a);
 
-    const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xc8b96c });
-    for (let z = 11; z > -35; z -= 6) {
-      const line = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 2.8), lineMaterial);
-      line.rotation.x = -Math.PI / 2;
-      line.position.set(0, 0.012, z);
-      this.scene.add(line);
-    }
+    this.addBuilding(-11.2, 4.5, -8, 6, 9, 32, 0x686965);
+    this.addBuilding(11.2, 5, -8, 6, 10, 32, 0x716d67);
+    this.addBuilding(-10.8, 3.2, -29, 7, 6.4, 9, 0x5b5a56);
+    this.addBuilding(10.9, 4, -29, 7, 8, 9, 0x66615b);
 
-    this.addBox(-6.7, 3.5, -8, 5, 7, 15, 0x6f7068);
-    this.addBox(6.9, 4.5, -7, 5.5, 9, 17, 0x777168);
-    this.addBox(-7.2, 4, -25, 6, 8, 14, 0x635f59);
-    this.addBox(7.1, 3, -25, 5.7, 6, 14, 0x716d62);
+    this.addBrokenWall(-0.2, -7.6, 3.5, 0.75, 3.6, 0.12);
+    this.addBrokenWall(0.4, -13, 4.2, 0.8, 2.4, -0.08);
+    this.addRubble(-0.2, -3.9, 3.2, 2.6, 1.2, 0x797268);
+    this.addRubble(0.3, -9.8, 3.3, 4.4, 1.55, 0x68635d);
+    this.addRubble(-0.1, -15.3, 3.7, 3.2, 1.25, 0x756f65);
 
-    this.addSidewalk(-4.7);
-    this.addSidewalk(4.7);
+    this.addRubble(5.1, -3.2, 1.2, 1.3, 0.55, 0x777269);
+    this.addRubble(2.8, -17.2, 1, 1.1, 0.45, 0x777269);
 
-    this.addTree(-5.3, 5);
-    this.addTree(5.4, 2);
-    this.addTree(-5.2, -18);
-    this.addTree(5.1, -20);
+    this.addTree(-7.1, 7);
+    this.addTree(7.2, 5);
+    this.addTree(7.1, -17);
+    this.addTree(-7.2, -21);
 
-    this.addDebris(-2.5, -6, 1.1);
-    this.addDebris(2.35, -11, 0.85);
-    this.addDebris(-1.7, -15.5, 0.7);
-
+    this.addRocket();
     this.createGoal();
   }
 
-  addBox(x, y, z, width, height, depth, color) {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(width, height, depth),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.92 })
+  addRoad(x, z, width, depth, color) {
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, depth),
+      new THREE.MeshStandardMaterial({ color, roughness: 1 })
     );
-    mesh.position.set(x, y, z);
-    this.scene.add(mesh);
+    road.rotation.x = -Math.PI / 2;
+    road.position.set(x, 0, z);
+    this.scene.add(road);
   }
 
-  addSidewalk(x) {
-    const sidewalk = new THREE.Mesh(
-      new THREE.BoxGeometry(1.4, 0.16, 52),
-      new THREE.MeshStandardMaterial({ color: 0x89877f, roughness: 1 })
+  addBuilding(x, y, z, width, height, depth, color) {
+    const building = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.95 })
     );
-    sidewalk.position.set(x, 0.08, -11);
-    this.scene.add(sidewalk);
+    building.position.set(x, y, z);
+    this.scene.add(building);
+
+    const windowMaterial = new THREE.MeshBasicMaterial({ color: 0x202827 });
+    const facadeX = x > 0 ? x - width / 2 - 0.012 : x + width / 2 + 0.012;
+
+    for (let floor = 1.8; floor < height - 0.7; floor += 2.1) {
+      for (let offset = -depth / 2 + 2; offset < depth / 2 - 1; offset += 3.2) {
+        const windowMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.8, 0.95),
+          windowMaterial
+        );
+        windowMesh.position.set(facadeX, floor, z + offset);
+        windowMesh.rotation.y = x > 0 ? -Math.PI / 2 : Math.PI / 2;
+        this.scene.add(windowMesh);
+      }
+    }
+  }
+
+  addBrokenWall(x, z, width, depth, height, rotation) {
+    const wall = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      new THREE.MeshStandardMaterial({ color: 0x77736d, roughness: 1 })
+    );
+    wall.position.set(x, height / 2, z);
+    wall.rotation.y = rotation;
+    this.scene.add(wall);
+
+    this.colliders.push({
+      minX: x - width / 2,
+      maxX: x + width / 2,
+      minZ: z - depth,
+      maxZ: z + depth
+    });
+  }
+
+  addRubble(x, z, width, depth, height, color) {
+    const base = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      new THREE.MeshStandardMaterial({ color, roughness: 1 })
+    );
+    base.position.set(x, height / 2, z);
+    base.rotation.y = 0.08;
+    this.scene.add(base);
+
+    for (let index = 0; index < 4; index += 1) {
+      const chunk = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.35 + index * 0.07, 0),
+        new THREE.MeshStandardMaterial({ color: index % 2 ? 0x655f58 : 0x817a70 })
+      );
+      chunk.position.set(
+        x - width * 0.35 + index * width * 0.23,
+        height + 0.2,
+        z + (index % 2 ? depth * 0.22 : -depth * 0.2)
+      );
+      chunk.rotation.set(index * 0.2, index * 0.45, 0.2);
+      this.scene.add(chunk);
+    }
+
+    this.colliders.push({
+      minX: x - width / 2,
+      maxX: x + width / 2,
+      minZ: z - depth / 2,
+      maxZ: z + depth / 2
+    });
   }
 
   addTree(x, z) {
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18, 0.24, 2.6, 8),
+      new THREE.CylinderGeometry(0.18, 0.25, 2.7, 8),
       new THREE.MeshStandardMaterial({ color: 0x514535 })
     );
-    trunk.position.set(x, 1.3, z);
+    trunk.position.set(x, 1.35, z);
 
     const crown = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.15, 1),
-      new THREE.MeshStandardMaterial({ color: 0x354d38, roughness: 1 })
+      new THREE.IcosahedronGeometry(1.18, 1),
+      new THREE.MeshStandardMaterial({ color: 0x384c39, roughness: 1 })
     );
-    crown.position.set(x, 3.2, z);
-
+    crown.position.set(x, 3.25, z);
     this.scene.add(trunk, crown);
   }
 
-  addDebris(x, z, size) {
-    const debris = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(size, 0),
-      new THREE.MeshStandardMaterial({ color: 0x736c62, roughness: 1 })
-    );
-    debris.position.set(x, size * 0.55, z);
-    debris.rotation.set(0.3, 0.6, 0.2);
-    this.scene.add(debris);
-
-    this.colliders.push({
-      minX: x - size * 0.85,
-      maxX: x + size * 0.85,
-      minZ: z - size * 0.85,
-      maxZ: z + size * 0.85
+  addRocket() {
+    const group = new THREE.Group();
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color: 0x596050,
+      roughness: 0.72,
+      metalness: 0.18
     });
+
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.33, 2.8, 14),
+      bodyMaterial
+    );
+    body.rotation.x = Math.PI / 2;
+
+    const nose = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 0.8, 14),
+      new THREE.MeshStandardMaterial({ color: 0x444a3e, roughness: 0.8 })
+    );
+    nose.rotation.x = -Math.PI / 2;
+    nose.position.z = -1.75;
+
+    const finMaterial = new THREE.MeshStandardMaterial({ color: 0x464b40 });
+    for (const x of [-0.42, 0.42]) {
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.72), finMaterial);
+      fin.position.set(x, 0, 1.12);
+      group.add(fin);
+    }
+
+    group.add(body, nose);
+    group.position.set(this.rocketPosition.x, 0.42, this.rocketPosition.y);
+    group.rotation.z = 0.12;
+    this.scene.add(group);
   }
 
   createGoal() {
@@ -153,23 +233,22 @@ export class TrainingWorld {
 
     const leftPost = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.2, 0.18), material);
     const rightPost = leftPost.clone();
-    const top = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.18, 0.18), material);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.18, 0.18), material);
 
-    leftPost.position.set(-3, 1.6, -22);
-    rightPost.position.set(3, 1.6, -22);
-    top.position.set(0, 3.12, -22);
+    leftPost.position.set(-3.15, 1.6, -26.2);
+    rightPost.position.set(3.15, 1.6, -26.2);
+    top.position.set(0, 3.12, -26.2);
 
     const marker = new THREE.Mesh(
-      new THREE.PlaneGeometry(5.8, 3),
+      new THREE.PlaneGeometry(6.1, 3),
       new THREE.MeshBasicMaterial({
         color: 0xefc84a,
         transparent: true,
-        opacity: 0.09,
+        opacity: 0.08,
         side: THREE.DoubleSide
       })
     );
-    marker.position.set(0, 1.5, -22);
-
+    marker.position.set(0, 1.5, -26.2);
     this.scene.add(leftPost, rightPost, top, marker);
   }
 
@@ -233,7 +312,7 @@ export class TrainingWorld {
       const y = dy * scale;
 
       this.joystickVector.set(x / radius, y / radius);
-      this.joystickKnob.style.transform = `translate(${x}px, ${y}px)`;
+      this.joystickKnob.style.transform = "translate(" + x + "px, " + y + "px)";
     };
 
     const release = (event) => {
@@ -300,9 +379,16 @@ export class TrainingWorld {
 
   reset() {
     this.completed = false;
+    this.routeChoice = null;
+    this.correctedRoute = false;
+    this.routeDecisionMs = null;
+    this.minRocketDistance = Number.POSITIVE_INFINITY;
+    this.trajectory = [];
+    this.lastTrajectorySample = 0;
+    this.startTime = performance.now();
     this.yaw = 0;
     this.pitch = 0;
-    this.camera.position.set(0, 1.7, 11);
+    this.camera.position.set(0, 1.7, 16);
     this.camera.rotation.set(0, 0, 0);
     this.keys.clear();
     this.joystickVector.set(0, 0);
@@ -324,14 +410,83 @@ export class TrainingWorld {
   }
 
   isBlocked(x, z) {
-    if (x < -3.75 || x > 3.75 || z < -24 || z > 13) return true;
+    if (x < -7.6 || x > 7.6 || z < -29 || z > 18) return true;
 
     return this.colliders.some((box) =>
-      x > box.minX - 0.28 &&
-      x < box.maxX + 0.28 &&
-      z > box.minZ - 0.28 &&
-      z < box.maxZ + 0.28
+      x > box.minX - 0.3 &&
+      x < box.maxX + 0.3 &&
+      z > box.minZ - 0.3 &&
+      z < box.maxZ + 0.3
     );
+  }
+
+  getMetrics() {
+    return {
+      route: this.routeChoice || "не визначено",
+      decisionSeconds: this.routeDecisionMs === null
+        ? null
+        : Number((this.routeDecisionMs / 1000).toFixed(1)),
+      minRocketDistance: Number.isFinite(this.minRocketDistance)
+        ? Number(this.minRocketDistance.toFixed(1))
+        : null,
+      correctedRoute: this.correctedRoute,
+      trajectoryPoints: this.trajectory.length
+    };
+  }
+
+  registerRouteChoice() {
+    const { x, z } = this.camera.position;
+    if (z > 1) return;
+
+    if (x < -1.7 && this.routeChoice === null) {
+      this.routeChoice = "короткий небезпечний";
+      this.routeDecisionMs = performance.now() - this.startTime;
+    }
+
+    if (x > 1.7) {
+      if (this.routeChoice === null) {
+        this.routeChoice = "довший безпечніший";
+        this.routeDecisionMs = performance.now() - this.startTime;
+      } else if (this.routeChoice === "короткий небезпечний") {
+        this.correctedRoute = true;
+        this.routeChoice = "довший безпечніший";
+      }
+    }
+  }
+
+  trackTelemetry() {
+    const now = performance.now();
+    const dx = this.camera.position.x - this.rocketPosition.x;
+    const dz = this.camera.position.z - this.rocketPosition.y;
+    this.minRocketDistance = Math.min(this.minRocketDistance, Math.hypot(dx, dz));
+
+    if (now - this.lastTrajectorySample >= 250) {
+      this.lastTrajectorySample = now;
+      this.trajectory.push({
+        x: Number(this.camera.position.x.toFixed(2)),
+        z: Number(this.camera.position.z.toFixed(2)),
+        timeMs: Math.round(now - this.startTime)
+      });
+    }
+  }
+
+  fail(reason) {
+    if (this.completed) return;
+    this.completed = true;
+    this.stop();
+    this.onFailure({
+      reason,
+      metrics: this.getMetrics()
+    });
+  }
+
+  succeed() {
+    if (this.completed) return;
+    this.completed = true;
+    this.stop();
+    this.onSuccess({
+      metrics: this.getMetrics()
+    });
   }
 
   update(delta) {
@@ -354,7 +509,6 @@ export class TrainingWorld {
       rightInput /= inputLength;
     }
 
-    // Camera forward/right vectors for Three.js' -Z viewing direction.
     const forwardX = -Math.sin(this.yaw);
     const forwardZ = -Math.cos(this.yaw);
     const rightX = Math.cos(this.yaw);
@@ -372,10 +526,20 @@ export class TrainingWorld {
     this.camera.rotation.y = this.yaw;
     this.camera.rotation.x = this.pitch;
 
-    if (!this.completed && this.camera.position.z <= -21.3 && Math.abs(this.camera.position.x) < 3.2) {
-      this.completed = true;
-      this.stop();
-      this.onComplete();
+    this.registerRouteChoice();
+    this.trackTelemetry();
+
+    if (this.minRocketDistance < 2.7) {
+      this.fail("Ви наблизилися до нерозірваного боєприпасу на небезпечну відстань.");
+      return;
+    }
+
+    if (this.camera.position.z <= -25.2 && Math.abs(this.camera.position.x) < 3.4) {
+      if (this.routeChoice === "довший безпечніший") {
+        this.succeed();
+      } else {
+        this.fail("До контрольної точки обрано небезпечний маршрут через завали.");
+      }
     }
   }
 
