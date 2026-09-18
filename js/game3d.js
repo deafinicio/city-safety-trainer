@@ -7,6 +7,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import RAPIER from "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.20.0/+esm";
 import { stage01 } from "./stages/stage01.js";
 import { stage02 } from "./stages/stage02.js";
@@ -68,7 +69,7 @@ export class TrainingWorld {
     this.scene.background = new THREE.Color(0x8fa39f);
     this.scene.fog = new THREE.Fog(0xaebbb5, 38, 104);
 
-    this.camera = new THREE.PerspectiveCamera(68, 1, 0.1, 140);
+    this.camera = new THREE.PerspectiveCamera(64, 1, 0.1, 160);
     this.camera.rotation.order = "YXZ";
 
     this.renderer = new THREE.WebGLRenderer({
@@ -121,6 +122,7 @@ export class TrainingWorld {
     this.active = false;
     this.completed = false;
     this.colliders = [];
+    this.surfaceMaterialCache = new Map();
     this.bounds = { minX: -8, maxX: 8, minZ: -30, maxZ: 20 };
     this.currentStage = null;
     this.currentStageId = null;
@@ -343,6 +345,7 @@ export class TrainingWorld {
     this.stageRoot = new THREE.Group();
     this.scene.add(this.stageRoot);
     this.colliders = [];
+    this.surfaceMaterialCache = new Map();
     if (this.physicsInitialized) this.resetPhysicsWorld();
   }
 
@@ -812,10 +815,11 @@ export class TrainingWorld {
 
   createSurfaceTexture(surface, repeatX = 1, repeatY = 1) {
     const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 256;
+    const textureSize = this.graphicsProfile.name === "high" ? 512 : 256;
+    canvas.width = textureSize;
+    canvas.height = textureSize;
     const context = canvas.getContext("2d");
-    const image = context.createImageData(256, 256);
+    const image = context.createImageData(textureSize, textureSize);
     const contrast = {
       ground: 34,
       asphalt: 20,
@@ -834,7 +838,7 @@ export class TrainingWorld {
     for (let index = 0; index < image.data.length; index += 4) {
       const broadNoise = (random() - 0.5) * contrast;
       const fineNoise = (random() - 0.5) * contrast * 0.4;
-      const value = Math.max(120, Math.min(250, 220 + broadNoise + fineNoise));
+      const value = Math.max(112, Math.min(250, 214 + broadNoise + fineNoise));
       image.data[index] = value;
       image.data[index + 1] = value;
       image.data[index + 2] = value;
@@ -845,13 +849,29 @@ export class TrainingWorld {
     if (surface === "ground") {
       context.strokeStyle = "rgba(42, 55, 38, 0.22)";
       context.lineWidth = 1;
-      for (let index = 0; index < 180; index += 1) {
-        const x = random() * 256;
-        const y = random() * 256;
+      const grassBladeCount = textureSize * 1.4;
+      for (let index = 0; index < grassBladeCount; index += 1) {
+        const x = random() * textureSize;
+        const y = random() * textureSize;
         context.beginPath();
         context.moveTo(x, y);
-        context.lineTo(x + (random() - 0.5) * 5, y - 2 - random() * 5);
+        context.lineTo(x + (random() - 0.5) * 6, y - 2 - random() * 7);
         context.stroke();
+      }
+
+      for (let index = 0; index < 34; index += 1) {
+        context.fillStyle = `rgba(38, 53, 34, ${0.03 + random() * 0.055})`;
+        context.beginPath();
+        context.ellipse(
+          random() * textureSize,
+          random() * textureSize,
+          8 + random() * 34,
+          5 + random() * 18,
+          random() * Math.PI,
+          0,
+          Math.PI * 2
+        );
+        context.fill();
       }
     }
 
@@ -860,9 +880,9 @@ export class TrainingWorld {
         ? "rgba(45, 48, 48, 0.2)"
         : "rgba(95, 92, 85, 0.16)";
       context.lineWidth = 1;
-      for (let index = 0; index < 9; index += 1) {
-        let x = random() * 256;
-        let y = random() * 256;
+      for (let index = 0; index < 14; index += 1) {
+        let x = random() * textureSize;
+        let y = random() * textureSize;
         context.beginPath();
         context.moveTo(x, y);
         for (let segment = 0; segment < 4; segment += 1) {
@@ -872,23 +892,60 @@ export class TrainingWorld {
         }
         context.stroke();
       }
+
+      const aggregateCount = Math.floor(textureSize * 1.15);
+      for (let index = 0; index < aggregateCount; index += 1) {
+        const alpha = 0.035 + random() * 0.1;
+        context.fillStyle = random() > 0.5
+          ? `rgba(245, 242, 230, ${alpha})`
+          : `rgba(30, 32, 31, ${alpha})`;
+        const radius = 0.35 + random() * 1.35;
+        context.beginPath();
+        context.arc(random() * textureSize, random() * textureSize, radius, 0, Math.PI * 2);
+        context.fill();
+      }
     }
 
     if (surface === "wall") {
-      const stain = context.createLinearGradient(0, 0, 0, 256);
+      const stain = context.createLinearGradient(0, 0, 0, textureSize);
       stain.addColorStop(0, "rgba(255,255,255,0.1)");
       stain.addColorStop(0.7, "rgba(255,255,255,0)");
       stain.addColorStop(1, "rgba(54,46,38,0.16)");
       context.fillStyle = stain;
-      context.fillRect(0, 0, 256, 256);
+      context.fillRect(0, 0, textureSize, textureSize);
+
+      context.strokeStyle = "rgba(58, 49, 40, 0.075)";
+      context.lineWidth = 1;
+      for (let index = 0; index < 24; index += 1) {
+        const x = random() * textureSize;
+        const width = 1 + random() * 5;
+        context.beginPath();
+        context.moveTo(x, 0);
+        context.bezierCurveTo(
+          x - width,
+          textureSize * 0.3,
+          x + width,
+          textureSize * 0.68,
+          x + (random() - 0.5) * 5,
+          textureSize
+        );
+        context.stroke();
+      }
     }
 
     if (surface === "wood") {
-      for (let y = 8; y < 256; y += 13) {
+      for (let y = 8; y < textureSize; y += 13) {
         context.strokeStyle = `rgba(68, 43, 25, ${0.08 + random() * 0.08})`;
         context.beginPath();
         context.moveTo(0, y + random() * 4);
-        context.bezierCurveTo(70, y - 4, 170, y + 5, 256, y + random() * 3);
+        context.bezierCurveTo(
+          textureSize * 0.27,
+          y - 4,
+          textureSize * 0.66,
+          y + 5,
+          textureSize,
+          y + random() * 3
+        );
         context.stroke();
       }
     }
@@ -907,8 +964,20 @@ export class TrainingWorld {
     surface,
     { roughness = 0.92, metalness = 0, repeatX = 1, repeatY = 1, bumpScale = 0.025 } = {}
   ) {
+    const cacheKey = [
+      color,
+      surface,
+      roughness,
+      metalness,
+      Number(repeatX).toFixed(2),
+      Number(repeatY).toFixed(2),
+      bumpScale
+    ].join(":");
+    const cached = this.surfaceMaterialCache.get(cacheKey);
+    if (cached) return cached;
+
     const texture = this.createSurfaceTexture(surface, repeatX, repeatY);
-    return new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color,
       map: texture,
       bumpMap: texture,
@@ -916,6 +985,8 @@ export class TrainingWorld {
       roughness,
       metalness
     });
+    this.surfaceMaterialCache.set(cacheKey, material);
+    return material;
   }
 
   add(object) {
@@ -970,7 +1041,7 @@ export class TrainingWorld {
 
   addRoad(x, z, width, depth, color) {
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth, Math.max(1, Math.round(width / 2)), Math.max(1, Math.round(depth / 3))),
+      new THREE.BoxGeometry(width, 0.075, depth, Math.max(1, Math.round(width / 2)), 1, Math.max(1, Math.round(depth / 3))),
       this.createSurfaceMaterial(color, "asphalt", {
         repeatX: Math.max(1, width / 2.4),
         repeatY: Math.max(1, depth / 2.4),
@@ -978,10 +1049,51 @@ export class TrainingWorld {
         bumpScale: 0.035
       })
     );
-    road.rotation.x = -Math.PI / 2;
-    road.position.set(x, 0, z);
+    road.position.set(x, 0.008, z);
     road.userData.noShadow = true;
-    return this.add(road);
+    this.add(road);
+
+    const roadColor = new THREE.Color(color);
+    const hsl = {};
+    roadColor.getHSL(hsl);
+    const isHardSurface = hsl.s < 0.18;
+    if (isHardSurface && Math.max(width, depth) >= 8) {
+      const curbMaterial = this.createSurfaceMaterial(0xaaa79d, "concrete", {
+        repeatX: Math.max(1, Math.max(width, depth) / 2),
+        repeatY: 1,
+        roughness: 0.97,
+        bumpScale: 0.025
+      });
+      const vertical = depth >= width;
+      const curbLength = vertical ? depth : width;
+      for (const side of [-1, 1]) {
+        const curb = new THREE.Mesh(
+          new THREE.BoxGeometry(vertical ? 0.18 : curbLength, 0.16, vertical ? curbLength : 0.18),
+          curbMaterial
+        );
+        curb.position.set(
+          vertical ? x + side * (width / 2 + 0.08) : x,
+          0.08,
+          vertical ? z : z + side * (depth / 2 + 0.08)
+        );
+        this.add(curb);
+      }
+
+      if (this.graphicsProfile.name === "high") {
+        const cover = new THREE.Mesh(
+          new THREE.BoxGeometry(vertical ? 0.42 : 0.72, 0.025, vertical ? 0.72 : 0.42),
+          new THREE.MeshStandardMaterial({ color: 0x343936, roughness: 0.52, metalness: 0.62 })
+        );
+        cover.position.set(
+          vertical ? x + width * 0.33 : x - width * 0.25,
+          0.058,
+          vertical ? z - depth * 0.28 : z + depth * 0.3
+        );
+        this.add(cover);
+      }
+    }
+
+    return road;
   }
 
   addCollisionBox(x, z, width, depth, rotation = 0, padding = 0, height = 2.4) {
@@ -1053,7 +1165,7 @@ export class TrainingWorld {
 
   addBuilding(x, y, z, width, height, depth, color, { collidable = true } = {}) {
     const building = new THREE.Mesh(
-      new THREE.BoxGeometry(width, height, depth),
+      new RoundedBoxGeometry(width, height, depth, 2, 0.055),
       this.createSurfaceMaterial(color, "wall", {
         repeatX: Math.max(1, width / 2.8),
         repeatY: Math.max(1, height / 2.8),
@@ -1064,38 +1176,69 @@ export class TrainingWorld {
     building.position.set(x, y, z);
     this.add(building);
 
-    const frameMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd0cec4,
-      roughness: 0.72,
-      metalness: 0.05
-    });
+    const baseY = y - height / 2;
+    const plinth = new THREE.Mesh(
+      new RoundedBoxGeometry(width + 0.08, 0.58, depth + 0.08, 2, 0.035),
+      this.createSurfaceMaterial(0x555a57, "concrete", {
+        repeatX: Math.max(1, width / 2),
+        repeatY: Math.max(1, depth / 2),
+        roughness: 0.98,
+        bumpScale: 0.035
+      })
+    );
+    plinth.position.set(x, baseY + 0.29, z);
+    this.add(plinth);
+
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xd9d8d1, roughness: 0.58, metalness: 0.08 });
     const sillMaterial = new THREE.MeshStandardMaterial({ color: 0x8c8b85, roughness: 0.88 });
+    const revealMaterial = new THREE.MeshStandardMaterial({ color: 0x3f4544, roughness: 0.96 });
+    const pipeMaterial = new THREE.MeshStandardMaterial({ color: 0x777d7a, roughness: 0.6, metalness: 0.34 });
     const faceOnX = Math.abs(x) >= Math.abs(z);
     const faceDirection = faceOnX ? (x > 0 ? -1 : 1) : (z > 0 ? -1 : 1);
     const faceLength = faceOnX ? depth : width;
 
+    const placeOnFacade = (object, offset, objectY, outset = 0.02) => {
+      if (faceOnX) {
+        object.position.set(x + faceDirection * (width / 2 + outset), objectY, z + offset);
+        object.rotation.y = faceDirection < 0 ? -Math.PI / 2 : Math.PI / 2;
+      } else {
+        object.position.set(x + offset, objectY, z + faceDirection * (depth / 2 + outset));
+        object.rotation.y = faceDirection < 0 ? Math.PI : 0;
+      }
+      return object;
+    };
+
+    for (let floor = 2.82; floor < height - 0.4; floor += 2.1) {
+      const band = new THREE.Mesh(
+        new THREE.BoxGeometry(faceLength + 0.06, 0.055, 0.075),
+        new THREE.MeshStandardMaterial({ color: 0xaaa9a3, roughness: 0.86 })
+      );
+      placeOnFacade(band, 0, baseY + floor, 0.052);
+      this.add(band);
+    }
+
     for (let floor = 1.8; floor < height - 0.7; floor += 2.1) {
       for (let offset = -faceLength / 2 + 2; offset < faceLength / 2 - 1; offset += 3.2) {
         const lit = this.visualRandom(x + floor, z + offset, 4) > 0.77;
-        const windowMaterial = new THREE.MeshStandardMaterial({
-          color: lit ? 0xb8a36f : 0x26343a,
+        const windowMaterial = new THREE.MeshPhysicalMaterial({
+          color: lit ? 0xc5ad72 : 0x24363c,
           emissive: lit ? 0x5d431d : 0x071014,
-          emissiveIntensity: lit ? 0.72 : 0.16,
-          roughness: 0.22,
-          metalness: 0.12
+          emissiveIntensity: lit ? 0.58 : 0.1,
+          roughness: 0.1,
+          metalness: 0.05,
+          clearcoat: 0.72,
+          clearcoatRoughness: 0.16
         });
+
+        const reveal = new THREE.Mesh(new THREE.BoxGeometry(1.12, 1.3, 0.09), revealMaterial);
+        placeOnFacade(reveal, offset, baseY + floor, 0.018);
+        this.add(reveal);
+
         const windowMesh = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.92, 1.08),
+          new THREE.PlaneGeometry(0.9, 1.06),
           windowMaterial
         );
-
-        if (faceOnX) {
-          windowMesh.position.set(x + faceDirection * (width / 2 + 0.012), floor, z + offset);
-          windowMesh.rotation.y = faceDirection < 0 ? -Math.PI / 2 : Math.PI / 2;
-        } else {
-          windowMesh.position.set(x + offset, floor, z + faceDirection * (depth / 2 + 0.012));
-          windowMesh.rotation.y = faceDirection < 0 ? Math.PI : 0;
-        }
+        placeOnFacade(windowMesh, offset, baseY + floor, 0.071);
         this.add(windowMesh);
 
         const frame = new THREE.Group();
@@ -1115,9 +1258,45 @@ export class TrainingWorld {
         const sill = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.08, 0.16), sillMaterial);
         sill.position.set(0, -0.65, 0.035);
         frame.add(sill);
-        frame.position.copy(windowMesh.position);
-        frame.rotation.copy(windowMesh.rotation);
+        placeOnFacade(frame, offset, baseY + floor, 0.082);
         this.add(frame);
+
+        if (
+          this.graphicsProfile.name === "high" &&
+          this.visualRandom(x + offset, z + floor, 9) > 0.82
+        ) {
+          const unit = new THREE.Group();
+          const caseMesh = new THREE.Mesh(
+            new RoundedBoxGeometry(0.62, 0.34, 0.24, 2, 0.035),
+            new THREE.MeshStandardMaterial({ color: 0xc7c8c2, roughness: 0.66, metalness: 0.08 })
+          );
+          const fan = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.11, 0.11, 0.015, 18),
+            new THREE.MeshStandardMaterial({ color: 0x505654, roughness: 0.72 })
+          );
+          fan.rotation.x = Math.PI / 2;
+          fan.position.set(0.13, 0, 0.126);
+          unit.add(caseMesh, fan);
+          placeOnFacade(unit, offset + 0.78, baseY + floor - 0.34, 0.16);
+          this.add(unit);
+        }
+      }
+    }
+
+    for (const pipeOffset of [-faceLength / 2 + 0.34, faceLength / 2 - 0.34]) {
+      const pipe = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.052, 0.058, Math.max(1, height - 0.3), 12),
+        pipeMaterial
+      );
+      placeOnFacade(pipe, pipeOffset, baseY + height / 2, 0.105);
+      this.add(pipe);
+
+      const collarCount = Math.max(2, Math.floor(height / 2.2));
+      for (let index = 0; index < collarCount; index += 1) {
+        const collar = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 6, 12), pipeMaterial);
+        collar.rotation.x = Math.PI / 2;
+        placeOnFacade(collar, pipeOffset, baseY + 0.7 + index * 2.1, 0.105);
+        this.add(collar);
       }
     }
 
@@ -1213,44 +1392,73 @@ export class TrainingWorld {
     const group = new THREE.Group();
     const heightVariation = 0.88 + this.visualRandom(x, z, 1) * 0.3;
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15, 0.29, 2.85 * heightVariation, 10),
+      new THREE.CylinderGeometry(0.14, 0.3, 2.95 * heightVariation, 18, 5),
       this.createSurfaceMaterial(0x5a4632, "wood", {
-        repeatX: 2,
-        repeatY: 5,
+        repeatX: 3,
+        repeatY: 7,
         roughness: 1,
-        bumpScale: 0.055
+        bumpScale: 0.085
       })
     );
-    trunk.position.y = 1.42 * heightVariation;
+    trunk.position.y = 1.47 * heightVariation;
     trunk.rotation.z = (this.visualRandom(x, z, 2) - 0.5) * 0.055;
     group.add(trunk);
 
-    const branchMaterial = new THREE.MeshStandardMaterial({ color: 0x55412f, roughness: 1 });
-    for (const [offsetX, offsetZ, tilt] of [[-0.32, 0.05, -0.55], [0.29, -0.12, 0.5]]) {
-      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.09, 1.25, 7), branchMaterial);
-      branch.position.set(offsetX * 0.62, 2.35 * heightVariation, offsetZ);
+    const branchMaterial = new THREE.MeshStandardMaterial({ color: 0x4b3929, roughness: 1 });
+    for (const [offsetX, offsetZ, tilt, branchY] of [
+      [-0.34, 0.05, -0.58, 2.3],
+      [0.31, -0.13, 0.54, 2.42],
+      [-0.08, 0.24, -0.22, 2.65],
+      [0.16, -0.22, 0.27, 2.76]
+    ]) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.105, 1.35, 10), branchMaterial);
+      branch.position.set(offsetX * 0.7, branchY * heightVariation, offsetZ);
       branch.rotation.z = tilt;
-      branch.rotation.x = offsetZ * 0.8;
+      branch.rotation.x = offsetZ * 1.35;
       group.add(branch);
     }
 
-    const foliageColors = [0x304a35, 0x3d5a3e, 0x496847];
+    const rootMaterial = new THREE.MeshStandardMaterial({ color: 0x4b392a, roughness: 1 });
+    for (let index = 0; index < 5; index += 1) {
+      const root = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.1, 0.72, 8), rootMaterial);
+      const angle = index * Math.PI * 0.4 + this.visualRandom(x, z, index + 30) * 0.45;
+      root.position.set(Math.cos(angle) * 0.25, 0.075, Math.sin(angle) * 0.25);
+      root.rotation.z = Math.PI / 2 - 0.12;
+      root.rotation.y = -angle;
+      group.add(root);
+    }
+
+    const foliageColors = [0x27452f, 0x31563a, 0x3e6843, 0x496f49];
     const foliageLayout = [
-      [0, 3.35, 0, 1.2],
-      [-0.68, 3.15, 0.12, 0.86],
-      [0.65, 3.18, -0.08, 0.92],
-      [0.08, 3.78, 0.18, 0.82]
+      [0, 3.42, 0, 1.16, 0.94, 1.08],
+      [-0.72, 3.2, 0.1, 0.84, 0.82, 0.78],
+      [0.68, 3.24, -0.1, 0.9, 0.82, 0.82],
+      [0.05, 3.92, 0.14, 0.83, 0.74, 0.76],
+      [-0.45, 3.72, -0.52, 0.72, 0.67, 0.7],
+      [0.48, 3.63, 0.5, 0.76, 0.71, 0.72],
+      [0.02, 3.1, 0.67, 0.7, 0.64, 0.68],
+      [-0.08, 3.15, -0.7, 0.68, 0.62, 0.66]
     ];
-    foliageLayout.forEach(([offsetX, offsetY, offsetZ, radius], index) => {
+    const clusterLimit = this.graphicsProfile.name === "performance" ? 5 : foliageLayout.length;
+    foliageLayout.slice(0, clusterLimit).forEach(([
+      offsetX,
+      offsetY,
+      offsetZ,
+      radius,
+      scaleY,
+      scaleZ
+    ], index) => {
       const crown = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(radius * heightVariation, 1),
+        new THREE.SphereGeometry(radius * heightVariation, 16, 12),
         new THREE.MeshStandardMaterial({
           color: foliageColors[(index + Math.floor(this.visualRandom(x, z, 5) * 3)) % foliageColors.length],
-          roughness: 0.96,
-          flatShading: true
+          roughness: 0.88,
+          metalness: 0,
+          envMapIntensity: 0.35
         })
       );
       crown.position.set(offsetX, offsetY * heightVariation, offsetZ);
+      crown.scale.set(1, scaleY, scaleZ);
       crown.rotation.set(index * 0.24, index * 0.71, index * 0.16);
       group.add(crown);
     });
@@ -1684,13 +1892,21 @@ export class TrainingWorld {
 
   addParkedCar(x, z, rotation = 0, color = 0x4b6170) {
     const group = new THREE.Group();
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.38, metalness: 0.48 });
+    const bodyMaterial = new THREE.MeshPhysicalMaterial({
+      color,
+      roughness: 0.24,
+      metalness: 0.58,
+      clearcoat: 0.88,
+      clearcoatRoughness: 0.16
+    });
     const glassMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x26383e,
-      roughness: 0.12,
-      metalness: 0.15,
-      clearcoat: 0.72,
-      clearcoatRoughness: 0.18
+      roughness: 0.08,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.86,
+      clearcoat: 0.94,
+      clearcoatRoughness: 0.1
     });
     const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x171a19, roughness: 0.9 });
     const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x232725, roughness: 0.5, metalness: 0.5 });
@@ -1707,36 +1923,37 @@ export class TrainingWorld {
       roughness: 0.24
     });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.5, 3.48), bodyMaterial);
+    const body = new THREE.Mesh(new RoundedBoxGeometry(1.82, 0.5, 3.48, 4, 0.16), bodyMaterial);
     body.position.y = 0.62;
     group.add(body);
 
-    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.18, 1.02), bodyMaterial);
+    const hood = new THREE.Mesh(new RoundedBoxGeometry(1.72, 0.18, 1.02, 3, 0.065), bodyMaterial);
     hood.position.set(0, 0.91, -1.2);
     hood.rotation.x = -0.035;
     group.add(hood);
 
-    const trunk = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.2, 0.72), bodyMaterial);
+    const trunk = new THREE.Mesh(new RoundedBoxGeometry(1.7, 0.2, 0.72, 3, 0.06), bodyMaterial);
     trunk.position.set(0, 0.88, 1.39);
     group.add(trunk);
 
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.68, 1.65), glassMaterial);
+    const cabin = new THREE.Mesh(new RoundedBoxGeometry(1.5, 0.68, 1.65, 4, 0.2), glassMaterial);
     cabin.position.set(0, 1.18, -0.15);
+    cabin.scale.set(0.96, 1, 0.94);
     group.add(cabin);
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.09, 1.58), bodyMaterial);
+    const roof = new THREE.Mesh(new RoundedBoxGeometry(1.48, 0.09, 1.58, 3, 0.035), bodyMaterial);
     roof.position.set(0, 1.55, -0.14);
     group.add(roof);
 
     for (const wheelX of [-0.92, 0.92]) {
       for (const wheelZ of [-1.15, 1.15]) {
-        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 18), tireMaterial);
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 28), tireMaterial);
         wheel.position.set(wheelX, 0.34, wheelZ);
         wheel.rotation.z = Math.PI / 2;
         group.add(wheel);
 
         const hub = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.15, 0.15, 0.212, 12),
+          new THREE.CylinderGeometry(0.15, 0.15, 0.212, 20),
           new THREE.MeshStandardMaterial({ color: 0x8a8e8d, roughness: 0.34, metalness: 0.72 })
         );
         hub.position.copy(wheel.position);
@@ -1754,7 +1971,7 @@ export class TrainingWorld {
       tailLight.position.set(side * 0.58, 0.73, 1.77);
       group.add(tailLight);
 
-      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.16), trimMaterial);
+      const mirror = new THREE.Mesh(new RoundedBoxGeometry(0.24, 0.14, 0.16, 2, 0.04), trimMaterial);
       mirror.position.set(side * 0.91, 1.25, -0.66);
       group.add(mirror);
     }
