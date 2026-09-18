@@ -26,6 +26,15 @@ export const stage11 = {
     world.addInteriorWall(6.35, 0.8, 2.7, 0.32, 3.8, 0xa4a197);
     world.addInteriorWall(-0.7, 7.2, 0.32, 8.0, 3.8, 0x9d9b93);
     this.stairwell = world.addStairwell(4.1, 9.5);
+    world.addTextSign("СХОДОВА КЛІТИНА →", 3.85, 3.25, 0.58, Math.PI, "#356b46");
+    this.safeMarker = world.addSafeZoneMarker(4.1, 8.4, 0x80d99a);
+    this.pathGuides = [
+      world.addFloorGuide(1.5, -2.2, 0x80d99a),
+      world.addFloorGuide(3.8, 2.5, 0x80d99a),
+      world.addFloorGuide(4.1, 5.7, 0x80d99a)
+    ];
+    this.safeMarker.visible = false;
+    this.pathGuides.forEach((guide) => { guide.visible = false; });
 
     world.addBench(-3.8, -5.3, 0);
     world.addBench(2.7, -5.1, 0);
@@ -40,6 +49,8 @@ export const stage11 = {
       this.windowWall.userData.glassMaterial.emissive.setHex(0x0b1114);
       this.windowWall.userData.glassMaterial.emissiveIntensity = 0;
     }
+    this.safeMarker.visible = false;
+    this.pathGuides.forEach((guide) => { guide.visible = false; });
     world.stageState = {
       threatStarted: false,
       threatStartedAtMs: null,
@@ -118,6 +129,11 @@ export const stage11 = {
         }
 
         state.headingToSafeZone = true;
+        this.safeMarker.visible = true;
+        this.pathGuides.forEach((guide) => { guide.visible = true; });
+        world.setMissionInstruction(
+          "Розверніться від вікон. Ідіть за зеленими позначками через прохід «Сходова клітина» праворуч."
+        );
         world.clearDialogue();
       }
     );
@@ -133,7 +149,10 @@ export const stage11 = {
       state.threatStarted = true;
       state.threatStartedAtMs = world.elapsedMs;
       state.lastBurstAtMs = world.elapsedMs;
-      world.playGunfireBurst(0.055);
+      world.playGunfireBurst(0.17);
+      world.setMissionInstruction(
+        "⚠️ ЧУТНО СТРІЛЯНИНУ / РОБОТУ ППО. Відійдіть від вікон і зовнішньої стіни."
+      );
     }
 
     if (!state.threatStarted) return;
@@ -141,7 +160,7 @@ export const stage11 = {
     const threatAge = world.elapsedMs - state.threatStartedAtMs;
     if (world.elapsedMs - state.lastBurstAtMs >= Math.max(1900, 3800 - threatAge * 0.02)) {
       state.lastBurstAtMs = world.elapsedMs;
-      world.playGunfireBurst(Math.min(0.15, 0.055 + threatAge / 200000));
+      world.playGunfireBurst(Math.min(0.28, 0.17 + threatAge / 130000));
     }
 
     if (this.windowWall?.userData.glassMaterial) {
@@ -178,7 +197,22 @@ export const stage11 = {
 
     if (!state.headingToSafeZone) return;
 
-    if (threatAge > 40000 && state.safeZoneReachedAtMs === null) {
+    const safeDistance = Math.hypot(x - 4.1, z - 8.4);
+    if (state.safeZoneReachedAtMs === null) {
+      world.setMissionInstruction(
+        `Ідіть за зеленими позначками до сходової клітини праворуч — ${Math.max(0, Math.round(safeDistance))} м.`
+      );
+    } else {
+      world.setMissionInstruction("Зони за двома стінами досягнуто. Залишайтеся тут до припинення загрози.");
+    }
+
+    if (z >= 3.5 && x < 1.6) {
+      world.setMissionInstruction(
+        "Ви у внутрішній частині, але потрібна сходова клітина праворуч. Пройдіть через позначений зелений маршрут."
+      );
+    }
+
+    if (threatAge > 28000 && state.safeZoneReachedAtMs === null) {
       world.fail(
         "Ви не дісталися внутрішньої частини будівлі в межах часу реагування.",
         this.getMetrics(world)
@@ -186,10 +220,13 @@ export const stage11 = {
       return;
     }
 
-    const inSafeZone = x >= 2.2 && z >= 7.2;
+    const inSafeZone = x >= 2.0 && z >= 6.6;
     if (!inSafeZone) return;
 
-    if (state.safeZoneReachedAtMs === null) state.safeZoneReachedAtMs = world.elapsedMs;
+    if (state.safeZoneReachedAtMs === null) {
+      state.safeZoneReachedAtMs = world.elapsedMs;
+      world.setMissionInstruction("Зони за двома стінами досягнуто. Залишайтеся тут до припинення загрози.");
+    }
     if (world.lastInputMagnitude < 0.04) {
       state.safeWaitSeconds += delta;
     } else {
