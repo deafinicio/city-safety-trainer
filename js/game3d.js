@@ -35,6 +35,7 @@ export class TrainingWorld {
     onFailure,
     onActionChange,
     onDialogueChange,
+    onInstructionChange,
     onStageChange
   }) {
     this.canvas = canvas;
@@ -45,6 +46,7 @@ export class TrainingWorld {
     this.onFailure = onFailure;
     this.onActionChange = onActionChange;
     this.onDialogueChange = onDialogueChange;
+    this.onInstructionChange = onInstructionChange;
     this.onStageChange = onStageChange;
 
     this.scene = new THREE.Scene();
@@ -165,6 +167,7 @@ export class TrainingWorld {
     this.elapsedMs = 0;
     this.lastInputMagnitude = 0;
     this.currentStage.reset(this);
+    this.setMissionInstruction(this.currentStage.instruction);
     this.resize();
     this.active = true;
     this.clock.getDelta();
@@ -258,6 +261,10 @@ export class TrainingWorld {
       prompt: "",
       options: []
     });
+  }
+
+  setMissionInstruction(text) {
+    this.onInstructionChange?.(text);
   }
 
   openEmergencyDialer({ acceptedNumbers, onComplete, title = "Телефон екстреного виклику" }) {
@@ -457,7 +464,7 @@ export class TrainingWorld {
     modulation.stop(startAt + 1.3);
   }
 
-  playGunfireBurst(intensity = 0.1) {
+  playGunfireBurst(intensity = 0.2) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
 
@@ -465,8 +472,8 @@ export class TrainingWorld {
     if (this.audioContext.state === "suspended") this.audioContext.resume();
 
     const startAt = this.audioContext.currentTime;
-    for (const [index, offset] of [0, 0.24, 0.58].entries()) {
-      const duration = 0.075 + index * 0.012;
+    for (const [index, offset] of [0, 0.2, 0.48, 0.76].entries()) {
+      const duration = 0.13 + index * 0.008;
       const frameCount = Math.ceil(this.audioContext.sampleRate * duration);
       const buffer = this.audioContext.createBuffer(1, frameCount, this.audioContext.sampleRate);
       const data = buffer.getChannelData(0);
@@ -480,14 +487,34 @@ export class TrainingWorld {
       const filter = this.audioContext.createBiquadFilter();
       const gain = this.audioContext.createGain();
       filter.type = "bandpass";
-      filter.frequency.value = 420 + index * 130;
-      filter.Q.value = 0.7;
-      gain.gain.setValueAtTime(Math.max(0.035, intensity), startAt + offset);
+      filter.frequency.value = 620 + index * 110;
+      filter.Q.value = 0.55;
+      gain.gain.setValueAtTime(Math.max(0.12, intensity), startAt + offset);
       gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + duration);
       source.buffer = buffer;
       source.connect(filter);
       filter.connect(gain);
       gain.connect(this.audioContext.destination);
+      const thump = this.audioContext.createOscillator();
+      const thumpGain = this.audioContext.createGain();
+      thump.type = "square";
+      thump.frequency.setValueAtTime(145, startAt + offset);
+      thump.frequency.exponentialRampToValueAtTime(48, startAt + offset + 0.16);
+      thumpGain.gain.setValueAtTime(Math.max(0.08, intensity * 0.75), startAt + offset);
+      thumpGain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + 0.18);
+      thump.connect(thumpGain);
+      thumpGain.connect(this.audioContext.destination);
+      thump.start(startAt + offset);
+      thump.stop(startAt + offset + 0.19);
+
+      const delay = this.audioContext.createDelay(0.5);
+      const echo = this.audioContext.createGain();
+      delay.delayTime.setValueAtTime(0.16 + index * 0.012, startAt + offset);
+      echo.gain.setValueAtTime(Math.max(0.035, intensity * 0.28), startAt + offset);
+      echo.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + 0.34);
+      source.connect(delay);
+      delay.connect(echo);
+      echo.connect(this.audioContext.destination);
       source.start(startAt + offset);
     }
   }
@@ -1265,6 +1292,80 @@ export class TrainingWorld {
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
     return this.add(group);
+  }
+
+  addFloorGuide(x, z, color = 0x80d99a) {
+    const group = new THREE.Group();
+    const material = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.48,
+      transparent: true,
+      opacity: 0.78,
+      roughness: 0.55
+    });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.07, 8, 24), material);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.035;
+    group.add(ring);
+    group.position.set(x, 0, z);
+    return this.add(group);
+  }
+
+  addSafeZoneMarker(x, z, color = 0x80d99a) {
+    const group = new THREE.Group();
+    const material = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.6,
+      transparent: true,
+      opacity: 0.5,
+      side: THREE.DoubleSide
+    });
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.35, 32), material);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.025;
+    group.add(disc);
+
+    const column = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.9, 1.35, 2.6, 24, 1, true),
+      material
+    );
+    column.position.y = 1.3;
+    group.add(column);
+    group.position.set(x, 0, z);
+    return this.add(group);
+  }
+
+  addTextSign(text, x, y, z, rotation = 0, color = "#356b46") {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 256;
+    const context = canvas.getContext("2d");
+    context.fillStyle = color;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = "#f3f7f4";
+    context.lineWidth = 16;
+    context.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+    context.fillStyle = "#ffffff";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    let fontSize = 92;
+    do {
+      context.font = `900 ${fontSize}px Arial, sans-serif`;
+      fontSize -= 3;
+    } while (context.measureText(text).width > 930 && fontSize > 36);
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.6, 1.15),
+      new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })
+    );
+    sign.position.set(x, y, z);
+    sign.rotation.y = rotation;
+    return this.add(sign);
   }
 
   addInteriorFloor(width, depth, color = 0x77766f) {
