@@ -8,6 +8,8 @@ import { stage06 } from "./stages/stage06.js";
 import { stage07 } from "./stages/stage07.js";
 import { stage08 } from "./stages/stage08.js";
 import { stage09 } from "./stages/stage09.js";
+import { stage10 } from "./stages/stage10.js";
+import { stage11 } from "./stages/stage11.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
@@ -18,7 +20,9 @@ const STAGES = new Map([
   [stage06.id, stage06],
   [stage07.id, stage07],
   [stage08.id, stage08],
-  [stage09.id, stage09]
+  [stage09.id, stage09],
+  [stage10.id, stage10],
+  [stage11.id, stage11]
 ]);
 
 export class TrainingWorld {
@@ -83,6 +87,7 @@ export class TrainingWorld {
     this.dialogueHandler = null;
     this.controlsLocked = false;
     this.movementLocked = false;
+    this.movementSpeedMultiplier = 1;
     this.audioContext = null;
     this.elapsedMs = 0;
     this.startTime = 0;
@@ -149,6 +154,7 @@ export class TrainingWorld {
     this.clearAction();
     this.clearDialogue();
     this.movementLocked = false;
+    this.movementSpeedMultiplier = 1;
     this.yaw = 0;
     this.pitch = 0;
     this.keys.clear();
@@ -449,6 +455,41 @@ export class TrainingWorld {
     modulation.start(startAt);
     oscillator.stop(startAt + 1.3);
     modulation.stop(startAt + 1.3);
+  }
+
+  playGunfireBurst(intensity = 0.1) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!this.audioContext) this.audioContext = new AudioContextClass();
+    if (this.audioContext.state === "suspended") this.audioContext.resume();
+
+    const startAt = this.audioContext.currentTime;
+    for (const [index, offset] of [0, 0.24, 0.58].entries()) {
+      const duration = 0.075 + index * 0.012;
+      const frameCount = Math.ceil(this.audioContext.sampleRate * duration);
+      const buffer = this.audioContext.createBuffer(1, frameCount, this.audioContext.sampleRate);
+      const data = buffer.getChannelData(0);
+
+      for (let frame = 0; frame < frameCount; frame += 1) {
+        const decay = 1 - frame / frameCount;
+        data[frame] = (Math.random() * 2 - 1) * decay * decay;
+      }
+
+      const source = this.audioContext.createBufferSource();
+      const filter = this.audioContext.createBiquadFilter();
+      const gain = this.audioContext.createGain();
+      filter.type = "bandpass";
+      filter.frequency.value = 420 + index * 130;
+      filter.Q.value = 0.7;
+      gain.gain.setValueAtTime(Math.max(0.035, intensity), startAt + offset);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + duration);
+      source.buffer = buffer;
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.audioContext.destination);
+      source.start(startAt + offset);
+    }
   }
 
   add(object) {
@@ -1201,6 +1242,148 @@ export class TrainingWorld {
     return this.add(group);
   }
 
+  addCurbCover(x, z, length = 9, rotation = 0) {
+    const group = new THREE.Group();
+    const concrete = new THREE.MeshStandardMaterial({ color: 0xa09e93, roughness: 1 });
+    const lowGround = new THREE.MeshStandardMaterial({ color: 0x454b42, roughness: 1 });
+
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.38, length), concrete);
+    curb.position.y = 0.19;
+    group.add(curb);
+
+    const depression = new THREE.Mesh(new THREE.PlaneGeometry(2.3, length), lowGround);
+    depression.rotation.x = -Math.PI / 2;
+    depression.position.set(-1.32, -0.012, 0);
+    group.add(depression);
+
+    for (let offset = -length / 2 + 0.6; offset < length / 2; offset += 1.2) {
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.015, 0.035), lowGround);
+      seam.position.set(0, 0.39, offset);
+      group.add(seam);
+    }
+
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addInteriorFloor(width, depth, color = 0x77766f) {
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, depth),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.96 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0;
+    return this.add(floor);
+  }
+
+  addInteriorCeiling(width, depth) {
+    const ceiling = new THREE.Mesh(
+      new THREE.BoxGeometry(width, 0.2, depth),
+      new THREE.MeshStandardMaterial({ color: 0x8f8e87, roughness: 0.96 })
+    );
+    ceiling.position.y = 4.2;
+    this.add(ceiling);
+
+    const lightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe8e3cd,
+      emissive: 0x6c684f,
+      emissiveIntensity: 0.9
+    });
+    for (const z of [-6, 2, 9]) {
+      const light = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.05, 0.42), lightMaterial);
+      light.position.set(0, 4.08, z);
+      this.add(light);
+    }
+    return ceiling;
+  }
+
+  addInteriorWall(x, z, width, depth, height, color = 0xaaa79d) {
+    const wall = new THREE.Mesh(
+      new THREE.BoxGeometry(width, height, depth),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.94 })
+    );
+    wall.position.set(x, height / 2, z);
+    this.add(wall);
+    this.colliders.push({
+      minX: x - width / 2,
+      maxX: x + width / 2,
+      minZ: z - depth / 2,
+      maxZ: z + depth / 2
+    });
+    return wall;
+  }
+
+  addWindowedWall(z, width = 15.5) {
+    const group = new THREE.Group();
+    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xaaa79d, roughness: 0.95 });
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xe2e0d7, roughness: 0.75 });
+    const glassMaterial = new THREE.MeshStandardMaterial({
+      color: 0x7794a0,
+      emissive: 0x0b1114,
+      emissiveIntensity: 0,
+      transparent: true,
+      opacity: 0.48,
+      roughness: 0.18,
+      side: THREE.DoubleSide
+    });
+
+    const lowerWall = new THREE.Mesh(new THREE.BoxGeometry(width, 1.0, 0.3), wallMaterial);
+    lowerWall.position.set(0, 0.5, 0);
+    const upperWall = new THREE.Mesh(new THREE.BoxGeometry(width, 1.1, 0.3), wallMaterial);
+    upperWall.position.set(0, 3.35, 0);
+    group.add(lowerWall, upperWall);
+
+    const windowCenters = [-4.8, 0, 4.8];
+    for (const centerX of windowCenters) {
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.25), glassMaterial);
+      pane.position.set(centerX, 2.08, 0.17);
+      group.add(pane);
+
+      for (const frameX of [-1.78, 1.78]) {
+        const vertical = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 0.34), frameMaterial);
+        vertical.position.set(centerX + frameX, 2.1, 0);
+        group.add(vertical);
+      }
+      const middle = new THREE.Mesh(new THREE.BoxGeometry(3.55, 0.1, 0.34), frameMaterial);
+      middle.position.set(centerX, 2.08, 0);
+      group.add(middle);
+    }
+
+    group.position.set(0, 0, z);
+    group.userData.glassMaterial = glassMaterial;
+    this.colliders.push({ minX: -width / 2, maxX: width / 2, minZ: z - 0.15, maxZ: z + 0.15 });
+    return this.add(group);
+  }
+
+  addStairwell(x, z) {
+    const group = new THREE.Group();
+    const concrete = new THREE.MeshStandardMaterial({ color: 0x8e908b, roughness: 1 });
+    const rail = new THREE.MeshStandardMaterial({ color: 0x343a38, roughness: 0.7, metalness: 0.25 });
+
+    const back = new THREE.Mesh(new THREE.BoxGeometry(5.5, 4.2, 0.28), concrete);
+    back.position.set(0, 2.1, -2.15);
+    group.add(back);
+
+    for (let index = 0; index < 6; index += 1) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.22, 0.55), concrete);
+      step.position.set(0.75, 0.11 + index * 0.22, -1.55 + index * 0.43);
+      group.add(step);
+    }
+
+    const handrail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.7, 2.8), rail);
+    handrail.position.set(-1.0, 1.25, -0.35);
+    handrail.rotation.x = -0.48;
+    group.add(handrail);
+
+    const landing = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.16, 3.5), concrete);
+    landing.position.set(0, 0.06, 1.05);
+    group.add(landing);
+
+    group.position.set(x, 0, z);
+    return this.add(group);
+  }
+
   addMineSignBack(x, z, rotation = 0) {
     const group = new THREE.Group();
     const postMaterial = new THREE.MeshStandardMaterial({
@@ -1666,7 +1849,7 @@ export class TrainingWorld {
     const forwardZ = -Math.cos(this.yaw);
     const rightX = Math.cos(this.yaw);
     const rightZ = -Math.sin(this.yaw);
-    const speed = 4.4;
+    const speed = 4.4 * this.movementSpeedMultiplier;
     const dx = (forwardX * forwardInput + rightX * rightInput) * speed * delta;
     const dz = (forwardZ * forwardInput + rightZ * rightInput) * speed * delta;
 
