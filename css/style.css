@@ -236,6 +236,10 @@ h2 {
   display: none;
 }
 
+.joystick[hidden] {
+  display: none;
+}
+
 @media (pointer: coarse) {
   .desktop-hint {
     display: none;
@@ -267,6 +271,10 @@ h2 {
     border-radius: 50%;
     background: rgba(5, 8, 6, 0.26);
     touch-action: none;
+  }
+
+  .joystick[hidden] {
+    display: none;
   }
 
   .joystick__knob {
