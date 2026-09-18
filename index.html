@@ -14,17 +14,17 @@
       <p class="eyebrow">Інтерактивний 3D-тренажер</p>
       <h1 id="game-title">Безпечне місто</h1>
       <p class="lead">
-        Пройдіть змодельовані міські ситуації, розпізнайте загрози
-        та оберіть безпечніший алгоритм дій.
+        Оглядайте середовище, самостійно розпізнавайте загрози
+        та обирайте безпечніший алгоритм дій.
       </p>
 
       <div class="notice" role="note">
-        <strong>Перший технічний прототип.</strong>
-        На цьому етапі ми перевіряємо рух, огляд і роботу на різних пристроях.
+        <strong>Етап 1 · Зруйнований сектор.</strong>
+        Ваше завдання — дістатися контрольної точки, не наражаючи себе на небезпеку.
       </div>
 
       <button class="button button--primary" id="start-button" type="button">
-        Увійти в тренувальну сцену
+        Почати етап
       </button>
     </section>
 
@@ -33,8 +33,8 @@
 
       <div class="game-hud">
         <div class="mission">
-          <span class="mission__label">Навчальне завдання</span>
-          <strong>Дійдіть до жовтої контрольної рамки</strong>
+          <span class="mission__label">Етап 1 · Зруйнований сектор</span>
+          <strong>Огляньте місцевість і дістаньтеся жовтої контрольної точки</strong>
         </div>
         <button class="hud-button" id="exit-button" type="button">Вийти</button>
       </div>
@@ -51,17 +51,44 @@
       </div>
 
       <div class="mobile-hint">Ліворуч — рух · праворуч — огляд</div>
+
+      <section class="scenario-feedback" id="failure-panel" hidden aria-live="assertive">
+        <span class="scenario-feedback__icon" aria-hidden="true">!</span>
+        <p class="eyebrow">Небезпека</p>
+        <h2>Обрано небезпечний алгоритм дій</h2>
+        <p id="failure-reason"></p>
+        <p class="feedback-guidance">
+          Не заходьте глибше в небезпечну зону, не наближайтеся до боєприпасу
+          та оберіть безпечніший маршрут.
+        </p>
+        <button class="button button--primary" id="retry-button" type="button">
+          Повторити епізод
+        </button>
+      </section>
     </section>
 
     <section class="screen" id="result-screen" aria-labelledby="result-title">
-      <p class="eyebrow">Перевірка керування завершена</p>
-      <h2 id="result-title">Контрольної точки досягнуто</h2>
-      <p class="lead">
-        Базове 3D-керування працює. Далі ми зможемо додати вибір маршруту,
-        небезпечні об’єкти, фіксацію дій та оцінювання.
-      </p>
+      <p class="eyebrow">Етап 1 завершено</p>
+      <h2 id="result-title">Обрано безпечніший маршрут</h2>
+      <p class="lead" id="result-message"></p>
+
+      <dl class="result-metrics">
+        <div>
+          <dt>Час вибору маршруту</dt>
+          <dd id="metric-time">—</dd>
+        </div>
+        <div>
+          <dt>Мінімальна дистанція</dt>
+          <dd id="metric-distance">—</dd>
+        </div>
+        <div>
+          <dt>Коригування рішення</dt>
+          <dd id="metric-correction">—</dd>
+        </div>
+      </dl>
+
       <button class="button button--primary" id="restart-button" type="button">
-        Повторити перевірку
+        Пройти етап ще раз
       </button>
     </section>
   </main>
