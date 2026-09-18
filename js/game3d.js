@@ -1,4 +1,11 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
+import { stage01 } from "./stages/stage01.js";
+import { stage02 } from "./stages/stage02.js";
+
+const STAGES = new Map([
+  [stage01.id, stage01],
+  [stage02.id, stage02]
+]);
 
 export class TrainingWorld {
   constructor({
@@ -7,7 +14,9 @@ export class TrainingWorld {
     joystickKnob,
     lookZone,
     onSuccess,
-    onFailure
+    onFailure,
+    onActionChange,
+    onStageChange
   }) {
     this.canvas = canvas;
     this.joystick = joystick;
@@ -15,12 +24,14 @@ export class TrainingWorld {
     this.lookZone = lookZone;
     this.onSuccess = onSuccess;
     this.onFailure = onFailure;
+    this.onActionChange = onActionChange;
+    this.onStageChange = onStageChange;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xa4aaa4);
-    this.scene.fog = new THREE.Fog(0xa4aaa4, 34, 82);
+    this.scene.fog = new THREE.Fog(0xa4aaa4, 34, 86);
 
-    this.camera = new THREE.PerspectiveCamera(68, 1, 0.1, 130);
+    this.camera = new THREE.PerspectiveCamera(68, 1, 0.1, 140);
     this.camera.rotation.order = "YXZ";
 
     this.renderer = new THREE.WebGLRenderer({
@@ -31,6 +42,14 @@ export class TrainingWorld {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+    this.scene.add(new THREE.HemisphereLight(0xe7ece8, 0x424942, 2.5));
+    const sun = new THREE.DirectionalLight(0xffedcf, 2.1);
+    sun.position.set(-14, 22, 10);
+    this.scene.add(sun);
+
+    this.stageRoot = new THREE.Group();
+    this.scene.add(this.stageRoot);
+
     this.clock = new THREE.Clock();
     this.keys = new Set();
     this.joystickVector = new THREE.Vector2();
@@ -39,58 +58,159 @@ export class TrainingWorld {
     this.active = false;
     this.completed = false;
     this.colliders = [];
-    this.rocketPosition = new THREE.Vector2(-3.7, -9.7);
+    this.bounds = { minX: -8, maxX: 8, minZ: -30, maxZ: 20 };
+    this.currentStage = null;
+    this.currentStageId = null;
+    this.stageState = {};
+    this.activeAction = null;
+    this.elapsedMs = 0;
+    this.startTime = 0;
+    this.lastInputMagnitude = 0;
 
-    this.createEnvironment();
     this.bindControls();
     this.resize();
-    this.reset();
 
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
   }
 
-  createEnvironment() {
-    this.scene.add(new THREE.HemisphereLight(0xe7ece8, 0x424942, 2.5));
+  getAvailableStages() {
+    return Array.from(STAGES.values()).map(({ id, number, title, shortTitle, instruction }) => ({
+      id,
+      number,
+      title,
+      shortTitle,
+      instruction
+    }));
+  }
 
-    const sun = new THREE.DirectionalLight(0xffedcf, 2.1);
-    sun.position.set(-14, 22, 10);
-    this.scene.add(sun);
+  clearStage() {
+    this.stageRoot.traverse((object) => {
+      object.geometry?.dispose();
 
+      if (Array.isArray(object.material)) {
+        object.material.forEach((material) => material.dispose());
+      } else {
+        object.material?.dispose();
+      }
+    });
+
+    this.scene.remove(this.stageRoot);
+    this.stageRoot = new THREE.Group();
+    this.scene.add(this.stageRoot);
+    this.colliders = [];
+  }
+
+  loadStage(stageId) {
+    const stage = STAGES.get(stageId);
+    if (!stage) throw new Error("Невідомий етап: " + stageId);
+
+    this.stop();
+    this.clearStage();
+    this.currentStage = stage;
+    this.currentStageId = stageId;
+    stage.build(this);
+    this.onStageChange?.({
+      id: stage.id,
+      number: stage.number,
+      title: stage.title,
+      shortTitle: stage.shortTitle,
+      instruction: stage.instruction
+    });
+  }
+
+  start(stageId) {
+    if (this.currentStageId !== stageId) {
+      this.loadStage(stageId);
+    }
+
+    this.completed = false;
+    this.clearAction();
+    this.yaw = 0;
+    this.pitch = 0;
+    this.keys.clear();
+    this.joystickVector.set(0, 0);
+    this.joystickKnob.style.transform = "translate(0, 0)";
+    this.camera.rotation.set(0, 0, 0);
+    this.startTime = performance.now();
+    this.elapsedMs = 0;
+    this.lastInputMagnitude = 0;
+    this.currentStage.reset(this);
+    this.resize();
+    this.active = true;
+    this.clock.getDelta();
+  }
+
+  stop() {
+    this.active = false;
+    this.keys.clear();
+    this.lastInputMagnitude = 0;
+
+    if (document.pointerLockElement === this.canvas) {
+      document.exitPointerLock?.();
+    }
+  }
+
+  complete(metrics) {
+    if (this.completed) return;
+    this.completed = true;
+    this.stop();
+    this.clearAction();
+    this.onSuccess?.({
+      stage: this.currentStage,
+      metrics
+    });
+  }
+
+  fail(reason, metrics) {
+    if (this.completed) return;
+    this.completed = true;
+    this.stop();
+    this.clearAction();
+    this.onFailure?.({
+      stage: this.currentStage,
+      reason,
+      metrics
+    });
+  }
+
+  setAction(label, handler) {
+    this.activeAction = { label, handler };
+    this.onActionChange?.({ visible: true, label });
+  }
+
+  clearAction() {
+    this.activeAction = null;
+    this.onActionChange?.({ visible: false, label: "" });
+  }
+
+  performAction() {
+    if (this.active && this.activeAction) {
+      this.activeAction.handler();
+    }
+  }
+
+  add(object) {
+    this.stageRoot.add(object);
+    return object;
+  }
+
+  setBounds(bounds) {
+    this.bounds = bounds;
+  }
+
+  setPlayerPosition(x, z) {
+    this.camera.position.set(x, 1.7, z);
+  }
+
+  addGround(color) {
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(100, 100),
-      new THREE.MeshStandardMaterial({ color: 0x596158, roughness: 1 })
+      new THREE.PlaneGeometry(110, 110),
+      new THREE.MeshStandardMaterial({ color, roughness: 1 })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.03;
-    this.scene.add(ground);
-
-    this.addRoad(0, 9, 12, 18, 0x363a38);
-    this.addRoad(-3.8, -8.5, 4.2, 21, 0x323634);
-    this.addRoad(4.2, -9.5, 5.1, 27, 0x474b47);
-    this.addRoad(0, -23.2, 12, 8, 0x393d3a);
-
-    this.addBuilding(-11.2, 4.5, -8, 6, 9, 32, 0x686965);
-    this.addBuilding(11.2, 5, -8, 6, 10, 32, 0x716d67);
-    this.addBuilding(-10.8, 3.2, -29, 7, 6.4, 9, 0x5b5a56);
-    this.addBuilding(10.9, 4, -29, 7, 8, 9, 0x66615b);
-
-    this.addBrokenWall(-0.2, -7.6, 3.5, 0.75, 3.6, 0.12);
-    this.addBrokenWall(0.4, -13, 4.2, 0.8, 2.4, -0.08);
-    this.addRubble(-0.2, -3.9, 3.2, 2.6, 1.2, 0x797268);
-    this.addRubble(0.3, -9.8, 3.3, 4.4, 1.55, 0x68635d);
-    this.addRubble(-0.1, -15.3, 3.7, 3.2, 1.25, 0x756f65);
-
-    this.addRubble(5.1, -3.2, 1.2, 1.3, 0.55, 0x777269);
-    this.addRubble(2.8, -17.2, 1, 1.1, 0.45, 0x777269);
-
-    this.addTree(-7.1, 7);
-    this.addTree(7.2, 5);
-    this.addTree(7.1, -17);
-    this.addTree(-7.2, -21);
-
-    this.addRocket();
-    this.createGoal();
+    return this.add(ground);
   }
 
   addRoad(x, z, width, depth, color) {
@@ -100,7 +220,7 @@ export class TrainingWorld {
     );
     road.rotation.x = -Math.PI / 2;
     road.position.set(x, 0, z);
-    this.scene.add(road);
+    return this.add(road);
   }
 
   addBuilding(x, y, z, width, height, depth, color) {
@@ -109,7 +229,7 @@ export class TrainingWorld {
       new THREE.MeshStandardMaterial({ color, roughness: 0.95 })
     );
     building.position.set(x, y, z);
-    this.scene.add(building);
+    this.add(building);
 
     const windowMaterial = new THREE.MeshBasicMaterial({ color: 0x202827 });
     const facadeX = x > 0 ? x - width / 2 - 0.012 : x + width / 2 + 0.012;
@@ -122,9 +242,11 @@ export class TrainingWorld {
         );
         windowMesh.position.set(facadeX, floor, z + offset);
         windowMesh.rotation.y = x > 0 ? -Math.PI / 2 : Math.PI / 2;
-        this.scene.add(windowMesh);
+        this.add(windowMesh);
       }
     }
+
+    return building;
   }
 
   addBrokenWall(x, z, width, depth, height, rotation) {
@@ -134,7 +256,7 @@ export class TrainingWorld {
     );
     wall.position.set(x, height / 2, z);
     wall.rotation.y = rotation;
-    this.scene.add(wall);
+    this.add(wall);
 
     this.colliders.push({
       minX: x - width / 2,
@@ -142,6 +264,8 @@ export class TrainingWorld {
       minZ: z - depth,
       maxZ: z + depth
     });
+
+    return wall;
   }
 
   addRubble(x, z, width, depth, height, color) {
@@ -151,7 +275,7 @@ export class TrainingWorld {
     );
     base.position.set(x, height / 2, z);
     base.rotation.y = 0.08;
-    this.scene.add(base);
+    this.add(base);
 
     for (let index = 0; index < 4; index += 1) {
       const chunk = new THREE.Mesh(
@@ -164,7 +288,7 @@ export class TrainingWorld {
         z + (index % 2 ? depth * 0.22 : -depth * 0.2)
       );
       chunk.rotation.set(index * 0.2, index * 0.45, 0.2);
-      this.scene.add(chunk);
+      this.add(chunk);
     }
 
     this.colliders.push({
@@ -173,6 +297,8 @@ export class TrainingWorld {
       minZ: z - depth / 2,
       maxZ: z + depth / 2
     });
+
+    return base;
   }
 
   addTree(x, z) {
@@ -187,10 +313,33 @@ export class TrainingWorld {
       new THREE.MeshStandardMaterial({ color: 0x384c39, roughness: 1 })
     );
     crown.position.set(x, 3.25, z);
-    this.scene.add(trunk, crown);
+    this.add(trunk);
+    this.add(crown);
   }
 
-  addRocket() {
+  addBench(x, z, rotation = 0) {
+    const group = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({ color: 0x68513c, roughness: 0.9 });
+    const metal = new THREE.MeshStandardMaterial({ color: 0x303532, roughness: 0.7 });
+
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.48), wood);
+    seat.position.y = 0.55;
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.7, 0.1), wood);
+    back.position.set(0, 0.9, 0.2);
+
+    for (const legX of [-0.65, 0.65]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.55, 0.1), metal);
+      leg.position.set(legX, 0.28, 0);
+      group.add(leg);
+    }
+
+    group.add(seat, back);
+    group.position.set(x, 0, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addRocket(x, z) {
     const group = new THREE.Group();
     const bodyMaterial = new THREE.MeshStandardMaterial({
       color: 0x596050,
@@ -212,19 +361,42 @@ export class TrainingWorld {
     nose.position.z = -1.75;
 
     const finMaterial = new THREE.MeshStandardMaterial({ color: 0x464b40 });
-    for (const x of [-0.42, 0.42]) {
+    for (const finX of [-0.42, 0.42]) {
       const fin = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.72), finMaterial);
-      fin.position.set(x, 0, 1.12);
+      fin.position.set(finX, 0, 1.12);
       group.add(fin);
     }
 
     group.add(body, nose);
-    group.position.set(this.rocketPosition.x, 0.42, this.rocketPosition.y);
+    group.position.set(x, 0.42, z);
     group.rotation.z = 0.12;
-    this.scene.add(group);
+    return this.add(group);
   }
 
-  createGoal() {
+  addMine(x, z, { rotation = 0, color = 0x596448, partiallyHidden = false } = {}) {
+    const group = new THREE.Group();
+    const material = new THREE.MeshStandardMaterial({ color, roughness: 0.92 });
+
+    const leftLobe = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 8), material);
+    leftLobe.scale.set(1, 0.17, 0.62);
+    leftLobe.position.x = -0.25;
+
+    const rightLobe = leftLobe.clone();
+    rightLobe.position.x = 0.25;
+
+    const center = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.11, 0.14, 0.12, 12),
+      new THREE.MeshStandardMaterial({ color: 0x3f4937, roughness: 0.85 })
+    );
+    center.position.y = 0.07;
+
+    group.add(leftLobe, rightLobe, center);
+    group.position.set(x, partiallyHidden ? -0.035 : 0.055, z);
+    group.rotation.y = rotation;
+    return this.add(group);
+  }
+
+  addGoal(x, z, width = 6.5) {
     const material = new THREE.MeshStandardMaterial({
       color: 0xefc84a,
       emissive: 0x4a3600,
@@ -233,14 +405,14 @@ export class TrainingWorld {
 
     const leftPost = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.2, 0.18), material);
     const rightPost = leftPost.clone();
-    const top = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.18, 0.18), material);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(width, 0.18, 0.18), material);
 
-    leftPost.position.set(-3.15, 1.6, -26.2);
-    rightPost.position.set(3.15, 1.6, -26.2);
-    top.position.set(0, 3.12, -26.2);
+    leftPost.position.set(x - width / 2, 1.6, z);
+    rightPost.position.set(x + width / 2, 1.6, z);
+    top.position.set(x, 3.12, z);
 
     const marker = new THREE.Mesh(
-      new THREE.PlaneGeometry(6.1, 3),
+      new THREE.PlaneGeometry(width - 0.4, 3),
       new THREE.MeshBasicMaterial({
         color: 0xefc84a,
         transparent: true,
@@ -248,8 +420,35 @@ export class TrainingWorld {
         side: THREE.DoubleSide
       })
     );
-    marker.position.set(0, 1.5, -26.2);
-    this.scene.add(leftPost, rightPost, top, marker);
+    marker.position.set(x, 1.5, z);
+
+    this.add(leftPost);
+    this.add(rightPost);
+    this.add(top);
+    return this.add(marker);
+  }
+
+  distanceToObject2D(object) {
+    const position = new THREE.Vector3();
+    object.getWorldPosition(position);
+    return Math.hypot(
+      this.camera.position.x - position.x,
+      this.camera.position.z - position.z
+    );
+  }
+
+  isObjectVisible(object, maxDistance, maxAngle) {
+    const objectPosition = new THREE.Vector3();
+    const cameraDirection = new THREE.Vector3();
+    const toObject = new THREE.Vector3();
+
+    object.getWorldPosition(objectPosition);
+    this.camera.getWorldDirection(cameraDirection);
+    toObject.subVectors(objectPosition, this.camera.position);
+
+    if (toObject.length() > maxDistance) return false;
+
+    return cameraDirection.angleTo(toObject.normalize()) <= maxAngle;
   }
 
   bindControls() {
@@ -270,6 +469,11 @@ export class TrainingWorld {
       if (movementCodes.has(event.code)) {
         event.preventDefault();
         this.keys.add(event.code);
+      }
+
+      if (event.code === "KeyE") {
+        event.preventDefault();
+        this.performAction();
       }
     });
 
@@ -377,40 +581,15 @@ export class TrainingWorld {
     this.renderer.setSize(width, height, false);
   }
 
-  reset() {
-    this.completed = false;
-    this.routeChoice = null;
-    this.correctedRoute = false;
-    this.routeDecisionMs = null;
-    this.minRocketDistance = Number.POSITIVE_INFINITY;
-    this.trajectory = [];
-    this.lastTrajectorySample = 0;
-    this.startTime = performance.now();
-    this.yaw = 0;
-    this.pitch = 0;
-    this.camera.position.set(0, 1.7, 16);
-    this.camera.rotation.set(0, 0, 0);
-    this.keys.clear();
-    this.joystickVector.set(0, 0);
-    this.joystickKnob.style.transform = "translate(0, 0)";
-    this.resize();
-  }
-
-  start() {
-    this.reset();
-    this.active = true;
-    this.clock.getDelta();
-  }
-
-  stop() {
-    this.active = false;
-    if (document.pointerLockElement === this.canvas) {
-      document.exitPointerLock?.();
-    }
-  }
-
   isBlocked(x, z) {
-    if (x < -7.6 || x > 7.6 || z < -29 || z > 18) return true;
+    if (
+      x < this.bounds.minX ||
+      x > this.bounds.maxX ||
+      z < this.bounds.minZ ||
+      z > this.bounds.maxZ
+    ) {
+      return true;
+    }
 
     return this.colliders.some((box) =>
       x > box.minX - 0.3 &&
@@ -420,78 +599,7 @@ export class TrainingWorld {
     );
   }
 
-  getMetrics() {
-    return {
-      route: this.routeChoice || "не визначено",
-      decisionSeconds: this.routeDecisionMs === null
-        ? null
-        : Number((this.routeDecisionMs / 1000).toFixed(1)),
-      minRocketDistance: Number.isFinite(this.minRocketDistance)
-        ? Number(this.minRocketDistance.toFixed(1))
-        : null,
-      correctedRoute: this.correctedRoute,
-      trajectoryPoints: this.trajectory.length
-    };
-  }
-
-  registerRouteChoice() {
-    const { x, z } = this.camera.position;
-    if (z > 1) return;
-
-    if (x < -1.7 && this.routeChoice === null) {
-      this.routeChoice = "короткий небезпечний";
-      this.routeDecisionMs = performance.now() - this.startTime;
-    }
-
-    if (x > 1.7) {
-      if (this.routeChoice === null) {
-        this.routeChoice = "довший безпечніший";
-        this.routeDecisionMs = performance.now() - this.startTime;
-      } else if (this.routeChoice === "короткий небезпечний") {
-        this.correctedRoute = true;
-        this.routeChoice = "довший безпечніший";
-      }
-    }
-  }
-
-  trackTelemetry() {
-    const now = performance.now();
-    const dx = this.camera.position.x - this.rocketPosition.x;
-    const dz = this.camera.position.z - this.rocketPosition.y;
-    this.minRocketDistance = Math.min(this.minRocketDistance, Math.hypot(dx, dz));
-
-    if (now - this.lastTrajectorySample >= 250) {
-      this.lastTrajectorySample = now;
-      this.trajectory.push({
-        x: Number(this.camera.position.x.toFixed(2)),
-        z: Number(this.camera.position.z.toFixed(2)),
-        timeMs: Math.round(now - this.startTime)
-      });
-    }
-  }
-
-  fail(reason) {
-    if (this.completed) return;
-    this.completed = true;
-    this.stop();
-    this.onFailure({
-      reason,
-      metrics: this.getMetrics()
-    });
-  }
-
-  succeed() {
-    if (this.completed) return;
-    this.completed = true;
-    this.stop();
-    this.onSuccess({
-      metrics: this.getMetrics()
-    });
-  }
-
-  update(delta) {
-    if (!this.active) return;
-
+  updateMovement(delta) {
     let forwardInput = 0;
     let rightInput = 0;
 
@@ -509,6 +617,8 @@ export class TrainingWorld {
       rightInput /= inputLength;
     }
 
+    this.lastInputMagnitude = Math.hypot(forwardInput, rightInput);
+
     const forwardX = -Math.sin(this.yaw);
     const forwardZ = -Math.cos(this.yaw);
     const rightX = Math.cos(this.yaw);
@@ -525,22 +635,14 @@ export class TrainingWorld {
 
     this.camera.rotation.y = this.yaw;
     this.camera.rotation.x = this.pitch;
+  }
 
-    this.registerRouteChoice();
-    this.trackTelemetry();
+  update(delta) {
+    if (!this.active || !this.currentStage) return;
 
-    if (this.minRocketDistance < 2.7) {
-      this.fail("Ви наблизилися до нерозірваного боєприпасу на небезпечну відстань.");
-      return;
-    }
-
-    if (this.camera.position.z <= -25.2 && Math.abs(this.camera.position.x) < 3.4) {
-      if (this.routeChoice === "довший безпечніший") {
-        this.succeed();
-      } else {
-        this.fail("До контрольної точки обрано небезпечний маршрут через завали.");
-      }
-    }
+    this.elapsedMs = performance.now() - this.startTime;
+    this.updateMovement(delta);
+    this.currentStage.update(this, delta);
   }
 
   animate() {
