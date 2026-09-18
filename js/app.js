@@ -10,6 +10,7 @@ const elements = {
   stage01Button: document.querySelector("#stage-01-button"),
   stage02Button: document.querySelector("#stage-02-button"),
   stage03Button: document.querySelector("#stage-03-button"),
+  stage04Button: document.querySelector("#stage-04-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
@@ -78,6 +79,22 @@ const resultContent = {
         ["Перетин межі", metrics.crossedBoundary ? "так" : "ні"]
       ];
     }
+  },
+  "stage-04": {
+    title: "Небезпечну ділянку залишено правильно",
+    message:
+      "Ви розпізнали непрямі ознаки мінної небезпеки, зупинилися, попередили інших і повернулися своїм шляхом.",
+    guidance:
+      "Неофіційні позначки та сукупність підозрілих ознак потрібно сприймати як можливу небезпеку: зупиніться, попередьте інших і повертайтеся своїм шляхом.",
+    metrics(metrics) {
+      return [
+        ["Ознаки розпізнано", metrics.cluesDetected ? "так" : "ні"],
+        ["Час до зупинки", formatSeconds(metrics.reactionSeconds)],
+        ["Попередження інших", metrics.warnedOthers ? "виконано" : "не виконано"],
+        ["Перетин межі", metrics.crossedBoundary ? "так" : "ні"],
+        ["Мінімальна дистанція", formatDistance(metrics.minDistance)]
+      ];
+    }
   }
 };
 
@@ -119,7 +136,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-03";
+  elements.nextButton.hidden = stage.id === "stage-04";
   showScreen("result");
 }
 
@@ -174,10 +191,17 @@ function returnToMenu() {
 elements.stage01Button.addEventListener("click", () => startTraining("stage-01"));
 elements.stage02Button.addEventListener("click", () => startTraining("stage-02"));
 elements.stage03Button.addEventListener("click", () => startTraining("stage-03"));
+elements.stage04Button.addEventListener("click", () => startTraining("stage-04"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
 elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
 elements.nextButton.addEventListener("click", () => {
-  startTraining(currentStageId === "stage-01" ? "stage-02" : "stage-03");
+  const nextStage = {
+    "stage-01": "stage-02",
+    "stage-02": "stage-03",
+    "stage-03": "stage-04"
+  }[currentStageId];
+
+  if (nextStage) startTraining(nextStage);
 });
 elements.menuButton.addEventListener("click", returnToMenu);
 elements.exitButton.addEventListener("click", returnToMenu);
