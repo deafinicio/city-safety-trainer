@@ -29,8 +29,9 @@ export const stage03 = {
 
     this.sign = world.addMineWarningSign(1.2, 0.7, -0.08);
     world.addWarningFence(4, -2, 7.5, 0);
-    world.addWarningFence(7.7, -10.5, 17, Math.PI / 2);
+    world.addWarningFence(7.75, -10.5, 17, Math.PI / 2);
     world.addWarningFence(4, -19, 7.5, 0);
+    world.addWarningFence(0.25, -10.5, 17, Math.PI / 2);
 
     world.addMine(2.2, -6.2, {
       rotation: 0.35,
