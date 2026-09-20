@@ -5,6 +5,7 @@ import {
   submitRegistration,
   validateRegistration
 } from "./registration.js";
+import { abandonAttempt, finishAttempt, startAttempt } from "./analytics.js";
 
 const screens = {
   registration: document.querySelector("#registration-screen"),
@@ -336,6 +337,7 @@ function renderMetrics(items) {
 }
 
 function renderResult({ stage, metrics }) {
+  finishAttempt("success", { metrics });
   const copy = resultContent[stage.id];
 
   elements.resultLabel.textContent = "Етап " + stage.number + " завершено";
@@ -347,7 +349,8 @@ function renderResult({ stage, metrics }) {
   showScreen("result");
 }
 
-function showFailure({ stage, reason }) {
+function showFailure({ stage, reason, metrics }) {
+  finishAttempt("failure", { metrics, failureReason: reason });
   const copy = resultContent[stage.id];
   elements.failureReason.textContent = reason;
   elements.failureGuidance.textContent = copy.guidance;
@@ -416,11 +419,13 @@ function ensureWorld() {
 }
 
 function startTraining(stageId) {
+  abandonAttempt("Етап перезапущено");
   currentStageId = stageId;
   elements.failurePanel.hidden = true;
   elements.dialoguePanel.hidden = true;
   elements.actionButton.hidden = true;
   showScreen("scene");
+  startAttempt(stageId);
   ensureWorld();
   requestAnimationFrame(() => {
     world.start(stageId).catch((error) => {
@@ -432,6 +437,7 @@ function startTraining(stageId) {
 }
 
 function returnToMenu() {
+  abandonAttempt("Користувач повернувся до списку етапів");
   world?.stop();
   world?.clearAction();
   elements.failurePanel.hidden = true;

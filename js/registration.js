@@ -1,5 +1,5 @@
-const SUPABASE_URL = "https://wigqkegxdaefixvoyynk.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_FzDtGdOB5SizoeTGnPrPkg_xouGDU5_";
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./config.js";
+
 const STORAGE_KEY = "city-safety-registration-v1";
 const NAME_PATTERN = /^[\p{L}\p{M}](?:[\p{L}\p{M}'’ʼ -]{0,78}[\p{L}\p{M}])?$/u;
 const ALLOWED_GENDERS = new Set(["female", "male", "other", "prefer_not_to_say"]);
@@ -54,9 +54,18 @@ export function validateRegistration(values) {
 export function hasStoredRegistration() {
   try {
     const registration = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return Boolean(registration?.participantId);
+    return Boolean(registration?.participantId && registration?.analyticsConsent === true);
   } catch {
     return false;
+  }
+}
+
+export function getStoredParticipantId() {
+  try {
+    const registration = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    return typeof registration?.participantId === "string" ? registration.participantId : null;
+  } catch {
+    return null;
   }
 }
 
@@ -96,7 +105,7 @@ export async function submitRegistration(data) {
     }
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ participantId }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ participantId, analyticsConsent: true }));
     } catch {
       // A successful remote registration should not be blocked by local storage settings.
     }

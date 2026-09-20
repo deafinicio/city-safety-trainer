@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#0b1410">
+  <title>Аналітика навчання — Безпечне місто</title>
+  <link rel="stylesheet" href="admin.css?v=20260920-1">
+</head>
+<body>
+  <main>
+    <section class="auth-shell" id="auth-view">
+      <div class="auth-card">
+        <a class="brand" href="../" aria-label="Повернутися до тренажера">
+          <span class="brand__mark">БМ</span>
+          <span><strong>Безпечне місто</strong><small>Адміністративна аналітика</small></span>
+        </a>
+        <div>
+          <p class="eyebrow">Захищена зона</p>
+          <h1>Вхід до дашборда</h1>
+          <p class="muted">Доступ мають лише адміністратори, додані до білого списку.</p>
+        </div>
+        <form id="auth-form" class="auth-form">
+          <label>Email<input id="auth-email" name="email" type="email" autocomplete="email" required></label>
+          <label>Пароль<input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="8" required></label>
+          <p class="status" id="auth-status" aria-live="polite"></p>
+          <button class="button button--primary" type="submit">Увійти</button>
+          <button class="button button--secondary" id="signup-button" type="button">Створити обліковий запис</button>
+        </form>
+        <p class="auth-footnote">Після першої реєстрації підтвердьте email у листі. Самостійна реєстрація не надає доступу без білого списку.</p>
+      </div>
+    </section>
+
+    <section class="dashboard" id="dashboard-view" hidden>
+      <aside class="sidebar">
+        <a class="brand brand--sidebar" href="../">
+          <span class="brand__mark">БМ</span>
+          <span><strong>Безпечне місто</strong><small>Аналітика навчання</small></span>
+        </a>
+        <nav class="nav" aria-label="Розділи дашборда">
+          <button class="nav__item nav__item--active" data-view="overview" type="button"><span>◫</span>Огляд</button>
+          <button class="nav__item" data-view="stages" type="button"><span>◉</span>Етапи</button>
+          <button class="nav__item" data-view="participants" type="button"><span>◎</span>Учасники</button>
+          <button class="nav__item" data-view="attempts" type="button"><span>↗</span>Спроби</button>
+        </nav>
+        <div class="sidebar__bottom">
+          <a href="../">Відкрити тренажер</a>
+          <button id="signout-button" type="button">Вийти</button>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Панель керування</p>
+            <h1 id="view-title">Огляд навчання</h1>
+          </div>
+          <div class="topbar__actions">
+            <span class="sync-status" id="sync-status">Завантаження…</span>
+            <button class="icon-button" id="refresh-button" type="button" aria-label="Оновити дані">↻</button>
+          </div>
+        </header>
+
+        <section class="toolbar" aria-label="Фільтри статистики">
+          <label><span>Період</span><select id="period-filter">
+            <option value="7">7 днів</option>
+            <option value="30" selected>30 днів</option>
+            <option value="90">90 днів</option>
+            <option value="all">Увесь час</option>
+          </select></label>
+          <label><span>Етап</span><select id="stage-filter"><option value="all">Усі етапи</option></select></label>
+          <label><span>Результат</span><select id="outcome-filter">
+            <option value="all">Усі результати</option>
+            <option value="success">Успішно</option>
+            <option value="failure">Помилка</option>
+            <option value="abandoned">Не завершено</option>
+          </select></label>
+          <div class="toolbar__exports">
+            <button class="button button--secondary" id="export-analytics" type="button">CSV результатів</button>
+            <button class="button button--secondary" id="export-participants" type="button">CSV учасників</button>
+          </div>
+        </section>
+
+        <p class="error-banner" id="dashboard-error" hidden></p>
+
+        <section class="view view--active" id="view-overview">
+          <div class="metric-grid" id="metric-grid"></div>
+          <div class="panel-grid panel-grid--wide">
+            <article class="panel">
+              <div class="panel__header"><div><p class="eyebrow">Активність</p><h2>Спроби за днями</h2></div><span class="legend"><i></i>Кількість</span></div>
+              <div class="activity-chart" id="activity-chart"></div>
+            </article>
+            <article class="panel">
+              <div class="panel__header"><div><p class="eyebrow">Якість</p><h2>Успішність етапів</h2></div></div>
+              <div class="stage-bars" id="overview-stage-bars"></div>
+            </article>
+          </div>
+          <div class="panel-grid">
+            <article class="panel">
+              <div class="panel__header"><div><p class="eyebrow">Аудиторія</p><h2>Стать учасників</h2></div></div>
+              <div class="donut-layout"><div class="donut" id="gender-donut"><span id="gender-total">0</span></div><div class="donut-legend" id="gender-legend"></div></div>
+            </article>
+            <article class="panel">
+              <div class="panel__header"><div><p class="eyebrow">Аудиторія</p><h2>Вікові групи</h2></div></div>
+              <div class="age-bars" id="age-bars"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-stages">
+          <article class="panel panel--table">
+            <div class="panel__header"><div><p class="eyebrow">Порівняння</p><h2>Якість проходження за етапами</h2></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Етап</th><th>Спроби</th><th>Успішно</th><th>Помилки</th><th>Не завершено</th><th>Успішність</th><th>Сер. час</th></tr></thead><tbody id="stages-table"></tbody></table></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-participants">
+          <article class="panel panel--table">
+            <div class="panel__header panel__header--search"><div><p class="eyebrow">Реєстр</p><h2>Учасники та результати</h2></div><label class="search"><span>Пошук</span><input id="participant-search" type="search" placeholder="Ім’я або прізвище"></label></div>
+            <div class="table-wrap"><table><thead><tr><th>Учасник</th><th>Вік</th><th>Стать</th><th>Реєстрація</th><th>Спроби</th><th>Завершено етапів</th><th>Успішність</th><th>Остання активність</th></tr></thead><tbody id="participants-table"></tbody></table></div>
+          </article>
+        </section>
+
+        <section class="view" id="view-attempts">
+          <article class="panel panel--table">
+            <div class="panel__header"><div><p class="eyebrow">Журнал</p><h2>Останні спроби</h2></div><span class="muted">До 250 останніх записів</span></div>
+            <div class="table-wrap"><table><thead><tr><th>Дата й час</th><th>Учасник</th><th>Етап</th><th>Спроба</th><th>Результат</th><th>Тривалість</th><th>Причина</th></tr></thead><tbody id="attempts-table"></tbody></table></div>
+          </article>
+        </section>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="admin.js?v=20260920-1"></script>
+</body>
+</html>
