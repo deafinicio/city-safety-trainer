@@ -666,6 +666,25 @@ h2 {
   line-height: 1.45;
 }
 
+.stage-card--experimental {
+  grid-column: 1 / -1;
+  min-height: 150px;
+  border-color: rgba(92, 205, 255, 0.42);
+  background:
+    linear-gradient(135deg, rgba(28, 72, 86, 0.82), rgba(25, 43, 35, 0.96));
+  box-shadow: inset 0 0 0 1px rgba(92, 205, 255, 0.08);
+}
+
+.stage-card--experimental:hover {
+  border-color: #71d8ff;
+  background:
+    linear-gradient(135deg, rgba(31, 88, 105, 0.9), rgba(31, 55, 43, 0.98));
+}
+
+.stage-card--experimental span {
+  color: #8de0ff;
+}
+
 .action-control {
   position: absolute;
   z-index: 24;

@@ -20,6 +20,7 @@ import { stage08 } from "./stages/stage08.js";
 import { stage09 } from "./stages/stage09.js";
 import { stage10 } from "./stages/stage10.js";
 import { stage11 } from "./stages/stage11.js";
+import { stage01Hd } from "./stages/stage01-hd.js";
 
 const STAGES = new Map([
   [stage01.id, stage01],
@@ -32,7 +33,8 @@ const STAGES = new Map([
   [stage08.id, stage08],
   [stage09.id, stage09],
   [stage10.id, stage10],
-  [stage11.id, stage11]
+  [stage11.id, stage11],
+  [stage01Hd.id, stage01Hd]
 ]);
 
 const PLAYER_RADIUS = 0.32;
@@ -106,6 +108,14 @@ export class TrainingWorld {
     fillLight.position.set(18, 12, -24);
     this.scene.add(fillLight);
 
+    this.defaultVisualEnvironment = {
+      background: 0x8fa39f,
+      fogColor: 0xaebbb5,
+      fogNear: 38,
+      fogFar: 104,
+      exposure: 1.08
+    };
+
     this.addAtmosphere();
     this.setupEnvironmentLighting();
     this.setupPostProcessing();
@@ -143,6 +153,7 @@ export class TrainingWorld {
     this.physicsWorld = null;
     this.characterController = null;
     this.playerCollider = null;
+    this.physicsActors = [];
     this.verticalVelocity = 0;
     this.physicsReady = RAPIER.init().then(() => {
       this.physicsInitialized = true;
@@ -413,6 +424,7 @@ export class TrainingWorld {
     this.characterController.enableSnapToGround(0.3);
     this.characterController.setMaxSlopeClimbAngle(48 * Math.PI / 180);
     this.characterController.setMinSlopeSlideAngle(38 * Math.PI / 180);
+    this.characterController.setApplyImpulsesToDynamicBodies?.(true);
 
     const ground = RAPIER.ColliderDesc.cuboid(60, 0.05, 60)
       .setTranslation(0, -0.05, 0)
@@ -423,6 +435,7 @@ export class TrainingWorld {
       .setTranslation(0, PLAYER_CENTER_HEIGHT, 0)
       .setFriction(0);
     this.playerCollider = this.physicsWorld.createCollider(player);
+    this.physicsActors = [];
     this.verticalVelocity = 0;
   }
 
@@ -468,6 +481,13 @@ export class TrainingWorld {
 
     this.stop();
     this.clearStage();
+    this.scene.background = new THREE.Color(this.defaultVisualEnvironment.background);
+    this.scene.fog = new THREE.Fog(
+      this.defaultVisualEnvironment.fogColor,
+      this.defaultVisualEnvironment.fogNear,
+      this.defaultVisualEnvironment.fogFar
+    );
+    this.renderer.toneMappingExposure = this.defaultVisualEnvironment.exposure;
     this.currentStage = stage;
     this.currentStageId = stageId;
     stage.build(this);
@@ -1350,6 +1370,126 @@ export class TrainingWorld {
 
     this.colliders.push(collider);
     return collider;
+  }
+
+  addPhysicsCrate(x, z, {
+    size = 0.72,
+    height = 0.72,
+    rotation = 0,
+    color = 0x76583b,
+    mass = 18
+  } = {}) {
+    const material = this.createSurfaceMaterial(color, "wood", {
+      repeatX: 2,
+      repeatY: 2,
+      roughness: 0.88,
+      bumpScale: 0.04
+    });
+    const crate = new THREE.Group();
+    const bodyMesh = new THREE.Mesh(
+      new RoundedBoxGeometry(size, height, size, 2, 0.025),
+      material
+    );
+    crate.add(bodyMesh);
+
+    const braceMaterial = new THREE.MeshStandardMaterial({
+      color: 0x3f2e20,
+      roughness: 0.9
+    });
+    for (const side of [-1, 1]) {
+      const brace = new THREE.Mesh(
+        new THREE.BoxGeometry(size * 0.9, 0.065, 0.045),
+        braceMaterial
+      );
+      brace.position.set(0, side * height * 0.34, size / 2 + 0.026);
+      crate.add(brace);
+    }
+
+    crate.position.set(x, height / 2 + 0.04, z);
+    crate.rotation.y = rotation;
+    this.add(crate);
+
+    if (!this.physicsWorld) return crate;
+
+    const halfAngle = rotation / 2;
+    const rigidBody = this.physicsWorld.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(x, height / 2 + 0.04, z)
+        .setRotation({ x: 0, y: Math.sin(halfAngle), z: 0, w: Math.cos(halfAngle) })
+        .setLinearDamping(0.7)
+        .setAngularDamping(1.1)
+    );
+    this.physicsWorld.createCollider(
+      RAPIER.ColliderDesc.cuboid(size / 2, height / 2, size / 2)
+        .setMass(mass)
+        .setFriction(0.86)
+        .setRestitution(0.04),
+      rigidBody
+    );
+    this.physicsActors.push({ object: crate, rigidBody });
+    return crate;
+  }
+
+  addPhysicsBarrel(x, z, {
+    radius = 0.31,
+    height = 0.92,
+    color = 0x4f625f,
+    mass = 24
+  } = {}) {
+    const group = new THREE.Group();
+    const shellMaterial = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.58,
+      metalness: 0.48
+    });
+    const rimMaterial = new THREE.MeshStandardMaterial({
+      color: 0x252c2b,
+      roughness: 0.46,
+      metalness: 0.7
+    });
+    const shell = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius, height, 24, 3),
+      shellMaterial
+    );
+    group.add(shell);
+    for (const y of [-height * 0.34, height * 0.34]) {
+      const rim = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 1.015, 0.024, 8, 24),
+        rimMaterial
+      );
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = y;
+      group.add(rim);
+    }
+    group.position.set(x, height / 2 + 0.04, z);
+    this.add(group);
+
+    if (!this.physicsWorld) return group;
+
+    const rigidBody = this.physicsWorld.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(x, height / 2 + 0.04, z)
+        .setLinearDamping(0.62)
+        .setAngularDamping(0.78)
+    );
+    this.physicsWorld.createCollider(
+      RAPIER.ColliderDesc.cylinder(height / 2, radius)
+        .setMass(mass)
+        .setFriction(0.74)
+        .setRestitution(0.08),
+      rigidBody
+    );
+    this.physicsActors.push({ object: group, rigidBody });
+    return group;
+  }
+
+  syncPhysicsActors() {
+    for (const { object, rigidBody } of this.physicsActors) {
+      const position = rigidBody.translation();
+      const rotation = rigidBody.rotation();
+      object.position.set(position.x, position.y, position.z);
+      object.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+    }
   }
 
   addLocalCollisionBox(
@@ -3203,6 +3343,7 @@ export class TrainingWorld {
     if (this.physicsWorld) {
       this.physicsWorld.timestep = delta;
       this.physicsWorld.step();
+      this.syncPhysicsActors();
     }
     this.updateMovement(scenarioDelta);
     this.currentStage.update(this, scenarioDelta);
