@@ -3090,6 +3090,10 @@ export class TrainingWorld {
     this.yaw -= dx * sensitivity;
     this.pitch -= dy * sensitivity;
     this.pitch = THREE.MathUtils.clamp(this.pitch, -1.25, 1.25);
+    if (this.active && !this.controlsLocked) {
+      this.camera.rotation.y = this.yaw;
+      this.camera.rotation.x = this.pitch;
+    }
   }
 
   resize() {

@@ -25,16 +25,18 @@ export const stage11 = {
     world.addInteriorWall(-2.55, 0.8, 10.7, 0.32, 3.8, 0xa4a197);
     world.addInteriorWall(6.35, 0.8, 2.7, 0.32, 3.8, 0xa4a197);
     world.addInteriorWall(-0.7, 7.2, 0.32, 8.0, 3.8, 0x9d9b93);
+    world.addInteriorWall(4.45, 4.5, 6.9, 0.32, 3.8, 0x9d9b93);
     this.stairwell = world.addStairwell(4.8, 11.2);
-    world.addTextSign("СХОДОВА КЛІТИНА →", 3.85, 3.25, 0.58, Math.PI, "#356b46");
-    this.safeMarker = world.addSafeZoneMarker(3.8, 7.35, 0x80d99a);
+    world.addTextSign("ЗАХИЩЕНИЙ КОРИДОР ←", 3.9, 3.25, 4.31, Math.PI, "#356b46");
+    this.safeMarker = world.addSafeZoneMarker(2.0, 7.2, 0x80d99a);
     this.pathGuides = [
       world.addFloorGuide(1.5, -2.2, 0x80d99a),
       world.addFloorGuide(3.8, 2.5, 0x80d99a),
-      world.addFloorGuide(4.1, 5.7, 0x80d99a),
-      world.addFloorGuide(2.6, 5.9, 0x80d99a),
-      world.addFloorGuide(3.5, 6.7, 0x80d99a),
-      world.addFloorGuide(3.8, 7.35, 0x80d99a)
+      world.addFloorGuide(1.8, 3.45, 0x80d99a),
+      world.addFloorGuide(0.15, 3.55, 0x80d99a),
+      world.addFloorGuide(0.15, 5.5, 0x80d99a),
+      world.addFloorGuide(1.0, 6.55, 0x80d99a),
+      world.addFloorGuide(2.0, 7.2, 0x80d99a)
     ];
     this.safeMarker.visible = false;
     this.pathGuides.forEach((guide) => { guide.visible = false; });
@@ -136,7 +138,7 @@ export const stage11 = {
         this.safeMarker.visible = true;
         this.pathGuides.forEach((guide) => { guide.visible = true; });
         world.setMissionInstruction(
-          "Розверніться від вікон. Ідіть за зеленими позначками через прохід «Сходова клітина» праворуч."
+          "Розверніться від вікон. Ідіть за зеленими позначками: праворуч за першу стіну, потім ліворуч у захищений коридор."
         );
         world.clearDialogue();
       }
@@ -201,10 +203,10 @@ export const stage11 = {
 
     if (!state.headingToSafeZone) return;
 
-    const safeDistance = Math.hypot(x - 3.8, z - 7.35);
+    const safeDistance = Math.hypot(x - 2.0, z - 7.2);
     if (state.safeZoneReachedAtMs === null) {
       world.setMissionInstruction(
-        `Ідіть за зеленими позначками до сходової клітини праворуч — ${Math.max(0, Math.round(safeDistance))} м.`
+        `Ідіть за зеленими позначками до коридору за двома суцільними стінами — ${Math.max(0, Math.round(safeDistance))} м.`
       );
     } else {
       world.setMissionInstruction("Зони за двома стінами досягнуто. Залишайтеся тут до припинення загрози.");
@@ -212,7 +214,7 @@ export const stage11 = {
 
     if (z >= 3.5 && x < 1.6) {
       world.setMissionInstruction(
-        "Ви у внутрішній частині, але потрібна сходова клітина праворуч. Пройдіть через позначений зелений маршрут."
+        "Пройдіть S-подібним зеленим маршрутом: обійдіть другу стіну ліворуч і зайдіть у захищений коридор."
       );
     }
 
@@ -224,7 +226,7 @@ export const stage11 = {
       return;
     }
 
-    const inSafeZone = x >= 2.4 && x <= 5.4 && z >= 6.25 && z <= 8.75;
+    const inSafeZone = x >= 1.05 && x <= 3.05 && z >= 6.2 && z <= 8.35;
     if (!inSafeZone) return;
 
     if (state.safeZoneReachedAtMs === null) {

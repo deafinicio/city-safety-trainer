@@ -39,7 +39,6 @@ export const stage08 = {
       lastSirenAtMs: -5000,
       approachStartedAtMs: null,
       lastApproachSoundAtMs: null,
-      approachPosition: null,
       proneAtMs: null,
       prone: false,
       shelterReachedAtMs: null,
@@ -70,7 +69,6 @@ export const stage08 = {
     if (state.approachStartedAtMs !== null) return;
     state.approachStartedAtMs = world.elapsedMs;
     state.lastApproachSoundAtMs = world.elapsedMs;
-    state.approachPosition = { x: world.camera.position.x, z: world.camera.position.z };
     world.playApproachRumble();
     world.setMissionInstruction(
       "⚠️ ЧУТНО ШВИДКЕ НАБЛИЖЕННЯ КАБу. Під’їзд уже недосяжний: негайно зупиніться та натисніть E, щоб лягти на землю."
@@ -129,22 +127,15 @@ export const stage08 = {
 
     const approachAge = world.elapsedMs - state.approachStartedAtMs;
     if (!state.prone) {
-      const movedAfterWarning = Math.hypot(
-        x - state.approachPosition.x,
-        z - state.approachPosition.z
+      const secondsLeft = Math.max(0, Math.ceil((7000 - approachAge) / 1000));
+      world.setMissionInstruction(
+        `⚠️ КАБ ШВИДКО НАБЛИЖАЄТЬСЯ. Зупиніться та натисніть E, щоб лягти на землю. На реакцію: ${secondsLeft} с.`
       );
-      if (movedAfterWarning > 0.9) {
-        world.fail(
-          "Після звуку швидкого наближення КАБу потрібно негайно припинити біг і лягти на землю.",
-          this.getMetrics(world)
-        );
-        return;
-      }
       if (world.elapsedMs - state.lastApproachSoundAtMs >= 2200) {
         state.lastApproachSoundAtMs = world.elapsedMs;
         world.playApproachRumble();
       }
-      if (approachAge > 7000) {
+      if (approachAge >= 7000) {
         world.fail(
           "Після наближення повітряної загрози положення лежачи не було зайнято вчасно.",
           this.getMetrics(world)
