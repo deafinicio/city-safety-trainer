@@ -1,4 +1,4 @@
-import { TrainingWorld } from "./game3d.js?v=20260920-3";
+import { TrainingWorld } from "./game3d.js?v=20260920-2";
 import {
   clearStoredRegistration,
   hasStoredRegistration,
@@ -30,7 +30,6 @@ const elements = {
   stage09Button: document.querySelector("#stage-09-button"),
   stage10Button: document.querySelector("#stage-10-button"),
   stage11Button: document.querySelector("#stage-11-button"),
-  stage01HdButton: document.querySelector("#stage-01-hd-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
@@ -73,21 +72,6 @@ const resultContent = {
         ["Час вибору маршруту", formatSeconds(metrics.decisionSeconds)],
         ["Мінімальна дистанція", formatDistance(metrics.minDistance)],
         ["Коригування рішення", metrics.correctedRoute ? "маршрут виправлено" : "не знадобилося"]
-      ];
-    }
-  },
-  "stage-01-hd": {
-    title: "HD-прототип пройдено",
-    message:
-      "Ви пройшли тестову версію зруйнованого сектору з оновленим оточенням і фізикою.",
-    guidance:
-      "Не заходьте глибше в небезпечну зону, не наближайтеся до боєприпасу та оберіть безпечніший маршрут.",
-    metrics(metrics) {
-      return [
-        ["Час вибору маршруту", formatSeconds(metrics.decisionSeconds)],
-        ["Мінімальна дистанція", formatDistance(metrics.minDistance)],
-        ["Коригування рішення", metrics.correctedRoute ? "маршрут виправлено" : "не знадобилося"],
-        ["Фізичний рушій", "Rapier 3D"]
       ];
     }
   },
@@ -359,7 +343,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-11" || stage.id === "stage-01-hd";
+  elements.nextButton.hidden = stage.id === "stage-11";
   showScreen("result");
 }
 
@@ -466,7 +450,6 @@ elements.stage08Button.addEventListener("click", () => startTraining("stage-08")
 elements.stage09Button.addEventListener("click", () => startTraining("stage-09"));
 elements.stage10Button.addEventListener("click", () => startTraining("stage-10"));
 elements.stage11Button.addEventListener("click", () => startTraining("stage-11"));
-elements.stage01HdButton.addEventListener("click", () => startTraining("stage-01-hd"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
 elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
 elements.nextButton.addEventListener("click", () => {
