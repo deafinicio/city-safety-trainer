@@ -94,6 +94,7 @@ export const stage10 = {
       {
         title: "Звуки стрілянини наближаються",
         prompt: "Яку дію потрібно виконати негайно?",
+        correctValue: "prone",
         options: options.map(([label, value]) => ({ label, value }))
       },
       (value) => {

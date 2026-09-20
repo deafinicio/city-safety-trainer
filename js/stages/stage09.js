@@ -28,7 +28,7 @@ export const stage09 = {
 
     this.busStop = world.addGlassBusStop(-5.0, 8.2, 0);
     this.shelter = world.addMobileShelter(4.7, -12.7, 0);
-    this.drone = world.addAttackDrone(-1.5, 8.5, 31);
+    this.drone = world.addAttackDrone(-2.5, 10.5, 48);
 
     world.addBench(4.9, 7.4, -Math.PI / 2);
     world.addParkedCar(2.3, 2.8, 0.02, 0x556c78);
@@ -52,6 +52,7 @@ export const stage09 = {
       decisionShown: false,
       decisionAtMs: null,
       headingToShelter: false,
+      pursuitStartedAtMs: null,
       stayedByGlass: false,
       groundByGlass: false,
       movedTowardThreat: false,
@@ -60,7 +61,7 @@ export const stage09 = {
       minShelterDistance: Number.POSITIVE_INFINITY,
       maxGlassDistance: 0
     };
-    this.drone.position.set(-1.5, 8.5, 31);
+    this.drone.position.set(-2.5, 10.5, 48);
   },
 
   getMetrics(world) {
@@ -96,6 +97,7 @@ export const stage09 = {
       {
         title: "Наближається БПЛА",
         prompt: "Який алгоритм дій є безпечнішим?",
+        correctValue: "shelter",
         options: options.map(([label, value]) => ({ label, value }))
       },
       (value) => {
@@ -129,12 +131,20 @@ export const stage09 = {
         }
 
         state.headingToShelter = true;
+        state.pursuitStartedAtMs = world.elapsedMs;
+        state.startShelterDistance = Math.hypot(
+          world.camera.position.x - 4.7,
+          world.camera.position.z + 11.1
+        );
+        world.setMissionInstruction(
+          "Відійдіть від скла та негайно біжіть до мобільного укриття попереду праворуч."
+        );
         world.clearDialogue();
       }
     );
   },
 
-  update(world) {
+  update(world, delta) {
     const state = world.stageState;
     const { x, z } = world.camera.position;
     const glassDistance = Math.hypot(x + 5.0, z - 8.2);
@@ -153,9 +163,17 @@ export const stage09 = {
 
     if (!state.threatStarted) return;
 
-    const threatProgress = Math.min(1, (world.elapsedMs - state.threatStartedAtMs) / 60000);
-    this.drone.position.z = 31 - threatProgress * 26;
-    this.drone.position.y = 8.5 - threatProgress * 3.5;
+    const threatProgress = Math.min(1, (world.elapsedMs - state.threatStartedAtMs) / 20000);
+    if (!state.headingToShelter) {
+      this.drone.position.z = 48 - threatProgress * 10;
+      this.drone.position.y = 10.5 - threatProgress * 1.5;
+    } else {
+      const chaseAlpha = 1 - Math.exp(-delta * 0.2);
+      this.drone.position.x += (x - this.drone.position.x) * chaseAlpha;
+      this.drone.position.z += (z + 1.2 - this.drone.position.z) * chaseAlpha;
+      this.drone.position.y += (4.8 - this.drone.position.y) * chaseAlpha;
+      this.drone.lookAt(x, 1.2, z);
+    }
 
     if (world.elapsedMs - state.lastBuzzAtMs >= 2700 && !state.shelterReachedAtMs) {
       state.lastBuzzAtMs = world.elapsedMs;
@@ -184,14 +202,6 @@ export const stage09 = {
         return;
       }
 
-      if (glassDistance < 3.5 && world.elapsedMs - state.threatStartedAtMs > 10000) {
-        state.stayedByGlass = true;
-        world.fail(
-          "Ви надто довго залишалися біля скляної конструкції після появи загрози.",
-          this.getMetrics(world)
-        );
-        return;
-      }
     }
 
     if (state.headingToShelter) {
@@ -209,13 +219,20 @@ export const stage09 = {
         world.complete(this.getMetrics(world));
         return;
       }
-    }
 
-    if (world.elapsedMs - state.threatStartedAtMs > 60000) {
-      world.fail(
-        "Мобільного укриття не було досягнуто в межах часу реагування.",
-        this.getMetrics(world)
+      const pursuitAge = world.elapsedMs - state.pursuitStartedAtMs;
+      const secondsLeft = Math.max(0, Math.ceil((14000 - pursuitAge) / 1000));
+      world.setMissionInstruction(
+        `Біжіть до мобільного укриття попереду праворуч — ${Math.ceil(shelterDistance)} м. До критичного наближення БПЛА: ${secondsLeft} с.`
       );
+      if (pursuitAge > 14000) {
+        this.drone.position.set(x, 3.2, z + 0.8);
+        world.fail(
+          "Ви не встигли дістатися укриття: БПЛА наздогнав вас. Після вибору укриття потрібно рухатися до нього без зволікання.",
+          this.getMetrics(world)
+        );
+        return;
+      }
     }
   }
 };

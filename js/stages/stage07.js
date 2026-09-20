@@ -86,6 +86,7 @@ export const stage07 = {
       {
         title: "Автомобіль зупинився в полі",
         prompt: "Яку дію потрібно виконати першою?",
+        correctValue: "stay",
         options: options.map(([label, value]) => ({ label, value }))
       },
       (value) => {
@@ -155,6 +156,7 @@ export const stage07 = {
       {
         title: `Умовний виклик ${state.calledNumber}`,
         prompt: step.prompt,
+        correctValue: step.correct,
         options: shuffleOptions(step.options).map(([label, value]) => ({ label, value }))
       },
       (value) => {
@@ -192,18 +194,12 @@ export const stage07 = {
     if (!state.detected && world.isObjectVisible(this.mine, 12, 0.62)) {
       state.detected = true;
       state.detectedAtMs = world.elapsedMs;
+      world.setMissionInstruction(
+        "Автомобіль зупинився біля ознак мінної небезпеки. Не виходьте й не намагайтеся рушити. Натисніть E, коли будете готові обрати дію."
+      );
     }
 
     if (!state.detected) return;
-
-    if (world.lastInputMagnitude > 0.12 && !world.controlsLocked) {
-      state.attemptedDrive = true;
-      world.fail(
-        "Після виявлення міни не можна намагатися продовжити рух автомобілем.",
-        this.getMetrics(world)
-      );
-      return;
-    }
 
     if (!state.decisionShown && world.elapsedMs - state.detectedAtMs >= 700) {
       state.decisionShown = true;
@@ -213,11 +209,5 @@ export const stage07 = {
       });
     }
 
-    if (state.decisionAtMs === null && world.elapsedMs - state.detectedAtMs > 10000) {
-      world.fail(
-        "Небезпеку розпізнано, але безпечний алгоритм дій не було обрано вчасно.",
-        this.getMetrics(world)
-      );
-    }
   }
 };

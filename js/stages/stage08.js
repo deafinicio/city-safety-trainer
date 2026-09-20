@@ -1,14 +1,3 @@
-function shuffleOptions(options) {
-  const shuffled = [...options];
-
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
-  }
-
-  return shuffled;
-}
-
 export const stage08 = {
   id: "stage-08",
   number: 8,
@@ -20,19 +9,16 @@ export const stage08 = {
     world.setBounds({ minX: -9, maxX: 9, minZ: -20.5, maxZ: 20 });
     world.addGround(0x596750);
     world.addRoad(0, 0, 9.5, 38, 0x73756f);
-
     world.addBuilding(0, 6, -23, 20, 12, 8, 0x74736f, { collidable: false });
     world.addCollisionBox(-5.65, -23, 8.7, 8);
     world.addCollisionBox(5.65, -23, 8.7, 8);
     world.addBuilding(-12.5, 5.2, 0, 7, 10.4, 42, 0x716c65);
     world.addBuilding(12.5, 5.6, 0, 7, 11.2, 42, 0x6c706e);
-
     this.entrance = world.addApartmentEntrance(0, -18.92);
     world.addPlayground(-4.9, 2.2);
     world.addParkedCar(5.8, 7.3, 0.06, 0x526a7a);
     world.addParkedCar(5.7, 1.8, -0.08, 0x7c5a4f);
     world.addParkedCar(5.9, -4.1, 0.04, 0x555a5e);
-
     world.addBench(-3.7, 8.7, Math.PI / 2);
     world.addBench(3.8, -10.2, -Math.PI / 2);
     world.addTree(-7.2, 13.4);
@@ -45,19 +31,17 @@ export const stage08 = {
     world.setPlayerPosition(0, 15.5);
     world.clearAction();
     world.clearDialogue();
+    world.movementLocked = false;
     world.stageState = {
       alarmStarted: false,
       alarmStartedAtMs: null,
-      alarmPosition: null,
+      evacuationStartedAtMs: null,
       lastSirenAtMs: -5000,
-      approachSoundPlayed: false,
-      stableStopSeconds: 0,
-      stoppedAtMs: null,
-      stopPosition: null,
-      movementBeforeStop: 0,
-      decisionAtMs: null,
-      headingToEntrance: false,
-      groundPositionChosen: false,
+      approachStartedAtMs: null,
+      lastApproachSoundAtMs: null,
+      approachPosition: null,
+      proneAtMs: null,
+      prone: false,
       shelterReachedAtMs: null,
       minEntranceDistance: Number.POSITIVE_INFINITY
     };
@@ -66,147 +50,111 @@ export const stage08 = {
   getMetrics(world) {
     const state = world.stageState;
     return {
-      reactionSeconds: state.stoppedAtMs === null || state.alarmStartedAtMs === null
+      reactionSeconds: state.evacuationStartedAtMs === null || state.alarmStartedAtMs === null
         ? null
-        : Number(((state.stoppedAtMs - state.alarmStartedAtMs) / 1000).toFixed(1)),
-      decisionSeconds: state.decisionAtMs === null || state.alarmStartedAtMs === null
+        : Number(((state.evacuationStartedAtMs - state.alarmStartedAtMs) / 1000).toFixed(1)),
+      proneSeconds: state.proneAtMs === null || state.approachStartedAtMs === null
         ? null
-        : Number(((state.decisionAtMs - state.alarmStartedAtMs) / 1000).toFixed(1)),
+        : Number(((state.proneAtMs - state.approachStartedAtMs) / 1000).toFixed(1)),
       shelterSeconds: state.shelterReachedAtMs === null || state.alarmStartedAtMs === null
         ? null
         : Number(((state.shelterReachedAtMs - state.alarmStartedAtMs) / 1000).toFixed(1)),
       reachedEntrance: state.shelterReachedAtMs !== null,
-      groundPositionChosen: state.groundPositionChosen,
-      movementBeforeStop: Number(state.movementBeforeStop.toFixed(1)),
+      groundPositionChosen: state.prone,
       minEntranceDistance: Number(state.minEntranceDistance.toFixed(1))
     };
   },
 
-  showDecision(world) {
+  beginApproachPhase(world) {
     const state = world.stageState;
-    const options = shuffleOptions([
-      ["Перейти до відкритого під’їзду", "entrance"],
-      ["Залишитися посеред двору й чекати", "stay"],
-      ["Лягти біля дитячого майданчика, хоча під’їзд доступний", "ground"]
-    ]);
-
-    world.setDialogue(
-      {
-        title: "Повітряна тривога",
-        prompt: "Яке доступніше безпечніше місце потрібно обрати?",
-        options: options.map(([label, value]) => ({ label, value }))
-      },
-      (value) => {
-        state.decisionAtMs = world.elapsedMs;
-
-        if (value === "stay") {
-          world.fail(
-            "Не можна залишатися у відкритій частині двору під час повітряної загрози.",
-            this.getMetrics(world)
-          );
-          return;
-        }
-
-        if (value === "ground") {
-          state.groundPositionChosen = true;
-          world.fail(
-            "Позиція на землі є запасним варіантом, коли доступнішого безпечного місця немає. У цій сцені поруч відкритий під’їзд.",
-            this.getMetrics(world)
-          );
-          return;
-        }
-
-        state.headingToEntrance = true;
-        world.clearDialogue();
-      }
+    if (state.approachStartedAtMs !== null) return;
+    state.approachStartedAtMs = world.elapsedMs;
+    state.lastApproachSoundAtMs = world.elapsedMs;
+    state.approachPosition = { x: world.camera.position.x, z: world.camera.position.z };
+    world.playApproachRumble();
+    world.setMissionInstruction(
+      "⚠️ ЧУТНО ШВИДКЕ НАБЛИЖЕННЯ КАБу. Під’їзд уже недосяжний: негайно зупиніться та натисніть E, щоб лягти на землю."
     );
+    world.setAction("Негайно лягти на землю", () => {
+      state.prone = true;
+      state.proneAtMs = world.elapsedMs;
+      world.movementLocked = true;
+      world.clearAction();
+      world.setMissionInstruction(
+        "Ви лежите, притиснувшись до землі. Закрийте голову руками та залишайтеся в нижчому положенні."
+      );
+    });
   },
 
-  update(world, delta) {
+  update(world) {
     const state = world.stageState;
     const { x, z } = world.camera.position;
     const entranceDistance = Math.hypot(x, z + 19.2);
     state.minEntranceDistance = Math.min(state.minEntranceDistance, entranceDistance);
+    world.camera.position.y = state.prone ? 0.48 : 1.7;
 
     if (!state.alarmStarted && world.elapsedMs >= 1400) {
       state.alarmStarted = true;
       state.alarmStartedAtMs = world.elapsedMs;
-      state.alarmPosition = { x, z };
       state.lastSirenAtMs = world.elapsedMs;
       world.playAirRaidSiren();
+      world.setMissionInstruction(
+        "⚠️ ПОВІТРЯНА ТРИВОГА. Відкритий під’їзд попереду — негайно біжіть до нього."
+      );
     }
-
     if (!state.alarmStarted) return;
 
-    if (world.elapsedMs - state.lastSirenAtMs >= 4800 && !state.shelterReachedAtMs) {
+    if (state.evacuationStartedAtMs === null && world.lastInputMagnitude > 0.08) {
+      state.evacuationStartedAtMs = world.elapsedMs;
+    }
+    if (world.elapsedMs - state.lastSirenAtMs >= 4800 && state.approachStartedAtMs === null) {
       state.lastSirenAtMs = world.elapsedMs;
       world.playAirRaidSiren();
     }
-
-    if (!state.approachSoundPlayed && world.elapsedMs - state.alarmStartedAtMs >= 60000) {
-      state.approachSoundPlayed = true;
-      world.playApproachRumble();
-    }
-
-    if (state.stoppedAtMs === null) {
-      state.movementBeforeStop = Math.max(
-        state.movementBeforeStop,
-        Math.hypot(x - state.alarmPosition.x, z - state.alarmPosition.z)
-      );
-
-      if (world.lastInputMagnitude < 0.04) {
-        state.stableStopSeconds += delta;
-        if (state.stableStopSeconds >= 0.65) {
-          state.stoppedAtMs = world.elapsedMs;
-          state.stopPosition = { x, z };
-          world.setAction("Оцінити безпечніші варіанти", () => {
-            world.clearAction();
-            this.showDecision(world);
-          });
-        }
-      } else {
-        state.stableStopSeconds = 0;
-      }
-
-      if (state.movementBeforeStop > 2.2) {
-        world.fail(
-          "Після сигналу тривоги ви продовжили рух відкритим двором, не зупинившись для оцінки ситуації.",
-          this.getMetrics(world)
-        );
-        return;
-      }
-
-      if (world.elapsedMs - state.alarmStartedAtMs > 60000) {
-        world.fail(
-          "Правильну реакцію на однозначний сигнал повітряної загрози не розпочато вчасно.",
-          this.getMetrics(world)
-        );
-      }
-      return;
-    }
-
-    if (!state.headingToEntrance) {
-      const movedAfterStop = Math.hypot(x - state.stopPosition.x, z - state.stopPosition.z);
-      if (movedAfterStop > 0.45 && !world.controlsLocked) {
-        world.fail(
-          "Після оцінки ситуації потрібно спочатку обрати доступніше безпечне місце.",
-          this.getMetrics(world)
-        );
-      }
-      return;
-    }
-
-    if (Math.abs(x) <= 1.25 && z <= -18.45) {
+    if (Math.abs(x) <= 1.25 && z <= -18.45 && state.approachStartedAtMs === null) {
       state.shelterReachedAtMs = world.elapsedMs;
       world.complete(this.getMetrics(world));
       return;
     }
 
-    if (world.elapsedMs - state.alarmStartedAtMs > 60000) {
-      world.fail(
-        "До наближення повітряної загрози відкритого під’їзду не було досягнуто.",
-        this.getMetrics(world)
+    const alarmAge = world.elapsedMs - state.alarmStartedAtMs;
+    if (state.approachStartedAtMs === null) {
+      const secondsLeft = Math.max(0, Math.ceil((14000 - alarmAge) / 1000));
+      world.setMissionInstruction(
+        `⚠️ ПОВІТРЯНА ТРИВОГА. Біжіть до відкритого під’їзду попереду — орієнтовно ${Math.ceil(entranceDistance)} м, до наближення загрози ${secondsLeft} с.`
       );
+      if (alarmAge >= 14000) this.beginApproachPhase(world);
+      return;
+    }
+
+    const approachAge = world.elapsedMs - state.approachStartedAtMs;
+    if (!state.prone) {
+      const movedAfterWarning = Math.hypot(
+        x - state.approachPosition.x,
+        z - state.approachPosition.z
+      );
+      if (movedAfterWarning > 0.9) {
+        world.fail(
+          "Після звуку швидкого наближення КАБу потрібно негайно припинити біг і лягти на землю.",
+          this.getMetrics(world)
+        );
+        return;
+      }
+      if (world.elapsedMs - state.lastApproachSoundAtMs >= 2200) {
+        state.lastApproachSoundAtMs = world.elapsedMs;
+        world.playApproachRumble();
+      }
+      if (approachAge > 7000) {
+        world.fail(
+          "Після наближення повітряної загрози положення лежачи не було зайнято вчасно.",
+          this.getMetrics(world)
+        );
+      }
+      return;
+    }
+
+    if (world.elapsedMs - state.proneAtMs >= 1800) {
+      world.complete(this.getMetrics(world));
     }
   }
 };

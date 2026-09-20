@@ -61,6 +61,7 @@ export const stage06 = {
       callSequenceCorrect: false,
       calledNumber: null,
       lastRingAtMs: -2000,
+      ringPulseUntilMs: 0,
       trajectory: [],
       lastTrajectorySample: 0
     };
@@ -137,6 +138,7 @@ export const stage06 = {
         variant: "questions",
         title: `Умовний виклик ${state.calledNumber}`,
         prompt: step.prompt,
+        correctValue: step.correct,
         options: shuffleOptions(step.options).map(([label, value]) => ({ label, value }))
       },
       (value) => {
@@ -167,6 +169,15 @@ export const stage06 = {
     const now = performance.now();
     const distance = world.distanceToObject2D(this.backpack);
 
+    if (world.elapsedMs < state.ringPulseUntilMs) {
+      const pulse = Math.sin(world.elapsedMs * 0.09) * 0.018;
+      this.backpack.rotation.z = pulse;
+      this.backpack.rotation.y = this.backpack.userData.restRotationY + pulse * 0.7;
+    } else {
+      this.backpack.rotation.z = 0;
+      this.backpack.rotation.y = this.backpack.userData.restRotationY;
+    }
+
     state.minDistance = Math.min(state.minDistance, distance);
 
     if (now - state.lastTrajectorySample >= 250) {
@@ -184,7 +195,8 @@ export const stage06 = {
       world.elapsedMs - state.lastRingAtMs >= 1800
     ) {
       state.lastRingAtMs = world.elapsedMs;
-      world.playAlertTone();
+      state.ringPulseUntilMs = world.elapsedMs + 1100;
+      world.playPhoneRingtone();
     }
 
     if (distance < 1.6) {

@@ -130,6 +130,7 @@ export class TrainingWorld {
     this.activeAction = null;
     this.activeDialogue = null;
     this.dialogueHandler = null;
+    this.lastCorrectOptionIndex = null;
     this.controlsLocked = false;
     this.movementLocked = false;
     this.movementSpeedMultiplier = 1;
@@ -502,6 +503,7 @@ export class TrainingWorld {
     this.camera.rotation.set(0, 0, 0);
     this.startTime = performance.now();
     this.elapsedMs = 0;
+    this.lastCorrectOptionIndex = null;
     this.lastInputMagnitude = 0;
     this.currentStage.reset(this);
     this.setMissionInstruction(this.currentStage.instruction);
@@ -563,7 +565,31 @@ export class TrainingWorld {
   }
 
   setDialogue(dialogue, handler) {
-    this.activeDialogue = dialogue;
+    const preparedDialogue = { ...dialogue };
+    if ((dialogue.variant || "questions") === "questions") {
+      const options = [...dialogue.options];
+      for (let index = options.length - 1; index > 0; index -= 1) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [options[index], options[randomIndex]] = [options[randomIndex], options[index]];
+      }
+
+      if (dialogue.correctValue !== undefined && options.length > 1) {
+        let correctIndex = options.findIndex((option) => option.value === dialogue.correctValue);
+        if (correctIndex === this.lastCorrectOptionIndex) {
+          const alternatives = options
+            .map((_, index) => index)
+            .filter((index) => index !== correctIndex && index !== this.lastCorrectOptionIndex);
+          const targetIndex = alternatives[Math.floor(Math.random() * alternatives.length)];
+          [options[correctIndex], options[targetIndex]] = [options[targetIndex], options[correctIndex]];
+          correctIndex = targetIndex;
+        }
+        this.lastCorrectOptionIndex = correctIndex;
+      }
+
+      preparedDialogue.options = options;
+    }
+
+    this.activeDialogue = preparedDialogue;
     this.dialogueHandler = handler;
     this.controlsLocked = true;
     this.keys.clear();
@@ -575,10 +601,10 @@ export class TrainingWorld {
 
     this.onDialogueChange?.({
       visible: true,
-      variant: dialogue.variant || "questions",
-      title: dialogue.title,
-      prompt: dialogue.prompt,
-      options: dialogue.options
+      variant: preparedDialogue.variant || "questions",
+      title: preparedDialogue.title,
+      prompt: preparedDialogue.prompt,
+      options: preparedDialogue.options
     });
   }
 
@@ -693,6 +719,36 @@ export class TrainingWorld {
     gain.connect(this.audioContext.destination);
     oscillator.start(startAt);
     oscillator.stop(startAt + 0.34);
+  }
+
+  playPhoneRingtone() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    if (!this.audioContext) this.audioContext = new AudioContextClass();
+    if (this.audioContext.state === "suspended") this.audioContext.resume();
+
+    const startAt = this.audioContext.currentTime;
+    for (const offset of [0, 0.22, 0.62, 0.84]) {
+      const oscillator = this.audioContext.createOscillator();
+      const overtone = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+      oscillator.type = "sine";
+      overtone.type = "triangle";
+      oscillator.frequency.setValueAtTime(760, startAt + offset);
+      overtone.frequency.setValueAtTime(1140, startAt + offset);
+      gain.gain.setValueAtTime(0.0001, startAt + offset);
+      gain.gain.exponentialRampToValueAtTime(0.085, startAt + offset + 0.025);
+      gain.gain.setValueAtTime(0.085, startAt + offset + 0.13);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + offset + 0.2);
+      oscillator.connect(gain);
+      overtone.connect(gain);
+      gain.connect(this.audioContext.destination);
+      oscillator.start(startAt + offset);
+      overtone.start(startAt + offset);
+      oscillator.stop(startAt + offset + 0.21);
+      overtone.stop(startAt + offset + 0.21);
+    }
   }
 
   playVehicleStopSound() {
@@ -1874,15 +1930,12 @@ export class TrainingWorld {
       roughness: 0.84
     });
 
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.82, 0.95, 0.38),
-      fabric
-    );
+    const body = new THREE.Mesh(new RoundedBoxGeometry(0.9, 1.05, 0.46, 5, 0.12), fabric);
     body.position.y = 0.53;
     group.add(body);
 
     const flap = new THREE.Mesh(
-      new THREE.BoxGeometry(0.7, 0.38, 0.08),
+      new RoundedBoxGeometry(0.74, 0.4, 0.1, 4, 0.05),
       trim
     );
     flap.position.set(0, 0.72, 0.23);
@@ -1890,7 +1943,7 @@ export class TrainingWorld {
     group.add(flap);
 
     const pocket = new THREE.Mesh(
-      new THREE.BoxGeometry(0.58, 0.3, 0.14),
+      new RoundedBoxGeometry(0.62, 0.34, 0.17, 4, 0.06),
       fabric
     );
     pocket.position.set(0, 0.35, 0.27);
@@ -1903,6 +1956,23 @@ export class TrainingWorld {
     handle.position.set(0, 1.04, 0);
     handle.rotation.z = Math.PI;
     group.add(handle);
+
+    for (const side of [-1, 1]) {
+      const sidePocket = new THREE.Mesh(
+        new RoundedBoxGeometry(0.16, 0.38, 0.3, 4, 0.05),
+        trim
+      );
+      sidePocket.position.set(side * 0.49, 0.35, 0.01);
+      group.add(sidePocket);
+    }
+
+    const zipper = new THREE.Mesh(
+      new THREE.TorusGeometry(0.37, 0.012, 6, 24, Math.PI),
+      new THREE.MeshStandardMaterial({ color: 0xb8bdba, metalness: 0.72, roughness: 0.3 })
+    );
+    zipper.position.set(0, 0.84, 0.255);
+    zipper.rotation.z = Math.PI;
+    group.add(zipper);
 
     for (const strapX of [-0.27, 0.27]) {
       const strap = new THREE.Mesh(
@@ -1921,12 +1991,13 @@ export class TrainingWorld {
         roughness: 0.35
       })
     );
-    phone.position.set(0.52, 0.04, 0.08);
-    phone.rotation.y = -0.35;
+    phone.position.set(0.33, 0.88, 0.2);
+    phone.rotation.set(-0.35, -0.18, 0.08);
     group.add(phone);
 
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
+    group.userData.restRotationY = rotation;
     this.addCollisionBox(x, z, 0.95, 0.68, rotation);
     return this.add(group);
   }
@@ -2591,15 +2662,17 @@ export class TrainingWorld {
     group.add(back);
 
     for (let index = 0; index < 6; index += 1) {
-      const step = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.22, 0.55), concrete);
-      step.position.set(0.75, 0.11 + index * 0.22, -1.55 + index * 0.43);
+      const step = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.22, 0.55), concrete);
+      step.position.set(1.15, 0.11 + index * 0.22, -1.55 + index * 0.43);
       group.add(step);
     }
 
-    const handrail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.7, 2.8), rail);
-    handrail.position.set(-1.0, 1.25, -0.35);
-    handrail.rotation.x = -0.48;
-    group.add(handrail);
+    for (const railX of [-0.18, 2.48]) {
+      const handrail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.7, 2.8), rail);
+      handrail.position.set(railX, 1.25, -0.35);
+      handrail.rotation.x = -0.48;
+      group.add(handrail);
+    }
 
     const landing = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.16, 3.5), concrete);
     landing.position.set(0, 0.06, 1.05);
@@ -3121,13 +3194,14 @@ export class TrainingWorld {
   update(delta) {
     if (!this.active || !this.currentStage) return;
 
-    this.elapsedMs = performance.now() - this.startTime;
+    const scenarioDelta = this.controlsLocked ? 0 : delta;
+    this.elapsedMs += scenarioDelta * 1000;
     if (this.physicsWorld) {
       this.physicsWorld.timestep = delta;
       this.physicsWorld.step();
     }
-    this.updateMovement(delta);
-    this.currentStage.update(this, delta);
+    this.updateMovement(scenarioDelta);
+    this.currentStage.update(this, scenarioDelta);
   }
 
   animate() {

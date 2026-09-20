@@ -56,7 +56,10 @@ export const stage05 = {
       stopPosition: null,
       movementAfterDetection: 0,
       callAtMs: null,
+      callStartedAtMs: null,
       calledNumber: null,
+      callStep: 0,
+      callSequenceCorrect: false,
       minMineDistance: Number.POSITIVE_INFINITY,
       trajectory: [],
       lastTrajectorySample: 0
@@ -78,9 +81,72 @@ export const stage05 = {
       minDistance: Number.isFinite(state.minMineDistance)
         ? Number(state.minMineDistance.toFixed(1))
         : null,
-      correctSequence: state.stoppedAtMs !== null && state.callAtMs !== null,
+      correctSequence: state.stoppedAtMs !== null && state.callAtMs !== null && state.callSequenceCorrect,
       trajectoryPoints: state.trajectory.length
     };
+  },
+
+  startCallSequence(world, stepIndex = 0) {
+    const state = world.stageState;
+    const steps = [
+      {
+        prompt: "Що потрібно повідомити оператору насамперед?",
+        correct: "location",
+        options: [
+          ["Точне місце та орієнтири, де помічено можливий знак", "location"],
+          ["Лише свій номер телефону", "phone"],
+          ["Припущення, хто встановив знак", "guess"]
+        ]
+      },
+      {
+        prompt: "Як правильно описати ситуацію?",
+        correct: "situation",
+        options: [
+          ["Я бачу зворотний бік можливого знака мінної небезпеки й зупинився", "situation"],
+          ["Я піду далі, щоб прочитати знак із лицьового боку", "closer"],
+          ["Я спробую самостійно знайти безпечний вихід", "exit"]
+        ]
+      },
+      {
+        prompt: "Що робити після передавання інформації?",
+        correct: "wait",
+        options: [
+          ["Не рухати ногами та виконувати вказівки оператора", "wait"],
+          ["Повернутися навмання тим напрямком, який здається коротшим", "return"],
+          ["Підійти до знака й перевірити його", "inspect"]
+        ]
+      }
+    ];
+    const step = steps[stepIndex];
+    state.callStep = stepIndex;
+
+    world.setDialogue(
+      {
+        title: `Діалог з екстреною службою ${state.calledNumber}`,
+        prompt: step.prompt,
+        correctValue: step.correct,
+        options: step.options.map(([label, value]) => ({ label, value }))
+      },
+      (value) => {
+        if (value !== step.correct) {
+          world.fail(
+            "Під час діалогу з екстреною службою обрано небезпечний або неправильний алгоритм.",
+            this.getMetrics(world)
+          );
+          return;
+        }
+
+        if (stepIndex < steps.length - 1) {
+          this.startCallSequence(world, stepIndex + 1);
+          return;
+        }
+
+        state.callAtMs = world.elapsedMs;
+        state.callSequenceCorrect = true;
+        world.clearDialogue();
+        world.complete(this.getMetrics(world));
+      }
+    );
   },
 
   update(world, delta) {
@@ -137,14 +203,13 @@ export const stage05 = {
           state.stoppedAtMs = world.elapsedMs;
           state.stopPosition = { x, z };
           world.setAction("Повідомити 101/112", () => {
+            state.callStartedAtMs = world.elapsedMs;
             world.clearAction();
             world.openEmergencyDialer({
               acceptedNumbers: ["101", "102", "112"],
               onComplete: (number) => {
                 state.calledNumber = number;
-                state.callAtMs = world.elapsedMs;
-                world.clearDialogue();
-                world.complete(this.getMetrics(world));
+                this.startCallSequence(world, 0);
               }
             });
           });
