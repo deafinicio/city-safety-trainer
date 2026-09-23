@@ -1,4 +1,4 @@
-import { TrainingWorld } from "./game3d.js?v=20260920-2";
+import { TrainingWorld } from "./game3d.js?v=20260923-citywalk-1";
 import {
   clearStoredRegistration,
   hasStoredRegistration,
@@ -31,6 +31,7 @@ const elements = {
   stage09Button: document.querySelector("#stage-09-button"),
   stage10Button: document.querySelector("#stage-10-button"),
   stage11Button: document.querySelector("#stage-11-button"),
+  testCityWalkButton: document.querySelector("#test-city-walk-button"),
   restartButton: document.querySelector("#restart-button"),
   retryButton: document.querySelector("#retry-button"),
   nextButton: document.querySelector("#next-button"),
@@ -242,6 +243,22 @@ const resultContent = {
         ["Мінімальна відстань до вікна", formatDistance(metrics.minWindowDistance)]
       ];
     }
+  },
+  "test-city-walk": {
+    title: "Єдиний міський маршрут завершено",
+    message:
+      "Ви пройшли три взаємопов’язані сектори, правильно відреагували на мінні та повітряні загрози й дісталися зони за двома стінами.",
+    guidance:
+      "Повторіть поточний епізод від контрольної точки. Дотримуйтеся вказівки у верхній частині екрана й не обирайте коротший маршрут, якщо він проходить через позначену або підозрілу ділянку.",
+    metrics(metrics) {
+      return [
+        ["Пройдені сценарні ситуації", `${metrics.eventsCompleted} з ${metrics.totalEvents}`],
+        ["Екстрені виклики 101", `${metrics.emergencyCalls} з 2`],
+        ["Передані мітки небезпеки", String(metrics.markedHazards)],
+        ["Загальний час маршруту", formatSeconds(metrics.routeSeconds)],
+        ["Зона за двома стінами", metrics.reachedTwoWalls ? "досягнуто" : "не досягнуто"]
+      ];
+    }
   }
 };
 
@@ -345,7 +362,7 @@ function renderResult({ stage, metrics }) {
   elements.resultMessage.textContent = copy.message;
   renderMetrics(copy.metrics(metrics));
 
-  elements.nextButton.hidden = stage.id === "stage-11";
+  elements.nextButton.hidden = stage.id === "stage-11" || stage.id === "test-city-walk";
   showScreen("result");
 }
 
@@ -456,8 +473,12 @@ elements.stage08Button.addEventListener("click", () => startTraining("stage-08")
 elements.stage09Button.addEventListener("click", () => startTraining("stage-09"));
 elements.stage10Button.addEventListener("click", () => startTraining("stage-10"));
 elements.stage11Button.addEventListener("click", () => startTraining("stage-11"));
+elements.testCityWalkButton.addEventListener("click", () => startTraining("test-city-walk"));
 elements.restartButton.addEventListener("click", () => startTraining(currentStageId));
-elements.retryButton.addEventListener("click", () => startTraining(currentStageId));
+elements.retryButton.addEventListener("click", () => {
+  elements.failurePanel.hidden = true;
+  if (!world?.retryCheckpoint()) startTraining(currentStageId);
+});
 elements.nextButton.addEventListener("click", () => {
   const nextStage = {
     "stage-01": "stage-02",
