@@ -1,4 +1,4 @@
-import { TrainingWorld } from "./game3d.js?v=20260923-citywalk-1";
+import { TrainingWorld } from "./game3d.js?v=20260923-citywalk-2";
 import {
   clearStoredRegistration,
   hasStoredRegistration,
